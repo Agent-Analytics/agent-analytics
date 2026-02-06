@@ -1,24 +1,25 @@
 name = "agent-analytics"
 main = "src/platforms/cloudflare.js"
 compatibility_date = "2024-01-01"
-# account_id = "YOUR_ACCOUNT_ID"  # Optional: uncomment if wrangler can't auto-detect
+account_id = "139518248fb33aa103fcd01dda727d2b"
+
+routes = [
+  { pattern = "api.agentanalytics.sh", custom_domain = true }
+]
 
 [[d1_databases]]
-binding = "DB"  # ⚠️ Must stay as "DB" — do not change this
+binding = "DB"
 database_name = "agent-analytics"
-database_id = "YOUR_DATABASE_ID"  # Replace with your D1 database ID
+database_id = "53211172-d64e-4a5f-bbbb-be088e9f1907"
+
+[[queues.producers]]
+binding = "ANALYTICS_QUEUE"
+queue = "agent-analytics-events"
+
+[[queues.consumers]]
+queue = "agent-analytics-events"
+max_batch_size = 100
+max_batch_timeout = 5
 
 [vars]
-ALLOWED_ORIGINS = "*"
-
-# --- Optional: Queues (requires Workers Paid plan, $5/mo) ---
-# Uncomment these for high-traffic sites. Not needed for most use cases.
-#
-# [[queues.producers]]
-# queue = "agent-analytics-events"
-# binding = "EVENTS_QUEUE"
-#
-# [[queues.consumers]]
-# queue = "agent-analytics-events"
-# max_batch_size = 100
-# max_batch_timeout = 5
+ALLOWED_ORIGINS = "https://clawflows.com,http://localhost:3000"

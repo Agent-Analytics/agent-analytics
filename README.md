@@ -4,7 +4,33 @@ Simple, self-hostable web analytics that your AI agent can read. Same idea as Go
 
 **Deploy to Cloudflare Workers** (free tier works great) or **self-host with Node.js + SQLite**.
 
-## Quick Start
+## Two Ways to Use
+
+| | **Hosted** | **Self-Hosted** |
+|---|---|---|
+| **Setup** | Sign in at [app.agentanalytics.sh](https://app.agentanalytics.sh) | Deploy this repo to Cloudflare or Node.js |
+| **CLI** | `npx agent-analytics login --token aak_xxx` | `npx agent-analytics login --token your_key` |
+| **Create project** | `npx agent-analytics create my-site --domain https://mysite.com` | `npx agent-analytics create my-site --domain https://mysite.com` |
+| **API URL** | `https://app.agentanalytics.sh` (default) | Set `AGENT_ANALYTICS_URL=https://your-worker.dev` |
+| **API key** | Generated in dashboard | You choose it at deploy time (`API_KEYS` env var) |
+
+### Using the CLI (works with both hosted and self-hosted)
+
+```bash
+# Hosted (default)
+npx agent-analytics login --token aak_your_key
+npx agent-analytics create my-site --domain https://mysite.com
+npx agent-analytics stats my-site
+
+# Self-hosted — just point to your instance
+AGENT_ANALYTICS_URL=https://your-worker.dev \
+AGENT_ANALYTICS_KEY=your_key \
+npx agent-analytics stats my-site
+```
+
+---
+
+## Self-Hosted Setup
 
 ### Cloudflare Workers (recommended)
 
@@ -133,31 +159,43 @@ Response:
 
 Your agent turns that into: *"4,821 pageviews from 1,203 unique visitors this week, up 23% from last week. 127 signup clicks at 2.6% conversion."*
 
-## Security
+## Auth & Keys
 
-Two types of auth — same model as Mixpanel:
+Two types of keys — same model as Mixpanel:
 
-### Project Token (ingestion)
+### Project Token (for tracking — public)
 
-Public token embedded in client-side code. Passed in the **request body** — no custom headers needed, no CORS preflight. Like Mixpanel's project token: identifies the project but isn't a secret.
-
-```bash
-echo "pt_your-token" | npx wrangler secret put PROJECT_TOKENS    # Cloudflare
-PROJECT_TOKENS=pt_abc123 npm start                                 # Self-hosted
-```
-
-If `PROJECT_TOKENS` isn't set, ingestion is open (good for dev/self-host).
-
-### API Key (query/read)
-
-Private key for reading data. Passed via `X-API-Key` header or `?key=` param. **Never expose in client code.**
+Embedded in the JS snippet on your site. Identifies which project events belong to. Not a secret — it's in your HTML.
 
 ```bash
-echo "your-secret-key" | npx wrangler secret put API_KEYS    # Cloudflare
-API_KEYS=your-secret-key npm start                             # Self-hosted
+# Cloudflare: set as a secret
+echo "pt_your-token" | npx wrangler secret put PROJECT_TOKENS
+
+# Node.js: pass as env var
+PROJECT_TOKENS=pt_abc123 npm start
 ```
 
-Required for: `/stats`, `/events`, `/query`, `/properties`.
+If `PROJECT_TOKENS` isn't set, ingestion is open (fine for single-tenant self-host).
+
+### API Key (for reading — private)
+
+Used by your agent to query stats. Pass via `X-API-Key` header or `?key=` param. **Keep this secret.**
+
+```bash
+# Cloudflare: set as a secret
+echo "my-secret-read-key" | npx wrangler secret put API_KEYS
+
+# Node.js: pass as env var
+API_KEYS=my-secret-read-key npm start
+```
+
+**This is the same key you use with the CLI:**
+```bash
+npx agent-analytics login --token my-secret-read-key
+AGENT_ANALYTICS_URL=https://your-worker.dev npx agent-analytics stats my-site
+```
+
+You choose these keys yourself when self-hosting. Use any string you want — just keep the API key private.
 
 ## Architecture
 
