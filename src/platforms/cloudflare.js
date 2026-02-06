@@ -1,8 +1,15 @@
 /**
  * Cloudflare Worker entry point
  * 
- * Wires up the D1 adapter and uses ctx.waitUntil() for
- * non-blocking write operations (track, batch).
+ * Two modes depending on config:
+ * 
+ * 1. WITH Queue (recommended for production):
+ *    fetch() enqueues events → queue() batch-writes to D1
+ *    Benefits: true non-blocking, automatic batching, retries
+ * 
+ * 2. WITHOUT Queue (simpler setup):
+ *    fetch() writes directly via ctx.waitUntil()
+ *    Works fine for low-medium traffic
  */
 
 import { D1Adapter } from '../db/d1.js';
@@ -11,17 +18,44 @@ import { handleRequest } from '../handlers.js';
 export default {
   async fetch(request, env, ctx) {
     const db = new D1Adapter(env.DB);
-    const { response, writeOps } = await handleRequest(request, db, env.API_KEYS, {
+    const queue = env.ANALYTICS_QUEUE || null;
+
+    const { response, writeOps, queueMessages } = await handleRequest(request, db, env.API_KEYS, {
       projectTokens: env.PROJECT_TOKENS,
+      useQueue: !!queue,
     });
 
-    // Fire-and-forget writes — response is already sent
-    if (writeOps) {
+    if (queue && queueMessages && queueMessages.length > 0) {
+      // Enqueue for async processing — instant response to client
+      ctx.waitUntil(
+        queue.sendBatch(queueMessages.map(msg => ({ body: msg })))
+      );
+    } else if (writeOps) {
+      // Direct write fallback (no queue configured)
       for (const op of writeOps) {
         ctx.waitUntil(op);
       }
     }
 
     return response;
+  },
+
+  /**
+   * Queue consumer — receives batched events and writes to D1.
+   * Cloudflare automatically batches messages (up to 100 per invocation).
+   */
+  async queue(batch, env) {
+    const db = new D1Adapter(env.DB);
+    const events = batch.messages.map(msg => msg.body);
+
+    try {
+      await db.trackBatch(events);
+      // Ack all messages on success
+      batch.ackAll();
+    } catch (err) {
+      console.error('Queue batch write failed:', err);
+      // Retry all messages
+      batch.retryAll();
+    }
   },
 };

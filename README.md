@@ -40,6 +40,23 @@ npx wrangler deploy
 
 That's it. You'll get a URL like `https://agent-analytics.YOUR-SUBDOMAIN.workers.dev`.
 
+#### Optional: Enable Queue (recommended for production)
+
+By default, events write directly to D1. For higher throughput and automatic retries, enable Cloudflare Queues:
+
+```bash
+# Create the queue
+npx wrangler queues create agent-analytics-events
+```
+
+Then uncomment the `[[queues.producers]]` and `[[queues.consumers]]` sections in `wrangler.toml` and redeploy:
+
+```bash
+npx wrangler deploy
+```
+
+With queues enabled, `/track` responds instantly and events are batch-written to D1 asynchronously (up to 100 events per batch, flushed every 5 seconds). The API is identical — no client-side changes needed.
+
 ### Self-Hosted (Node.js)
 
 ```bash
@@ -136,11 +153,11 @@ src/
     d1.js              — Cloudflare D1 adapter
     sqlite.js          — better-sqlite3 adapter (self-host)
   platforms/
-    cloudflare.js      — CF Worker entry (ctx.waitUntil for non-blocking writes)
+    cloudflare.js      — CF Worker entry (Queue + ctx.waitUntil)
     node.js            — Node.js HTTP server entry
 ```
 
-Handlers are platform-agnostic. SQL lives in the database adapters. Platform entry points just wire things together. Add a new adapter to support any database.
+Handlers are platform-agnostic — they return data and let the platform decide how to write it. On Cloudflare, writes go through a Queue (if configured) or `ctx.waitUntil`. On Node.js, writes are inline. Add a new adapter to support any database or platform.
 
 ## API Reference
 

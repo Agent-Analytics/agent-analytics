@@ -5,9 +5,10 @@
  * All database access goes through the db adapter.
  * All auth goes through auth.js.
  * 
- * Each handler returns { response, writeOps? } where writeOps
- * is an array of Promises the platform can fire-and-forget
- * (e.g. ctx.waitUntil on Cloudflare).
+ * Each handler returns { response, writeOps?, queueMessages? } where:
+ * - writeOps: array of Promises for direct DB writes (fire-and-forget)
+ * - queueMessages: array of event objects to enqueue (when useQueue is true)
+ * The platform entry point decides which path to use.
  */
 
 import { validateApiKey, validateProjectToken } from './auth.js';
@@ -47,12 +48,12 @@ export async function handleRequest(request, db, apiKeys, opts = {}) {
   try {
     // POST /track
     if (path === '/track' && request.method === 'POST') {
-      return await handleTrack(request, db, opts.projectTokens);
+      return await handleTrack(request, db, opts.projectTokens, { useQueue: opts.useQueue });
     }
 
     // POST /track/batch
     if (path === '/track/batch' && request.method === 'POST') {
-      return await handleTrackBatch(request, db, opts.projectTokens);
+      return await handleTrackBatch(request, db, opts.projectTokens, { useQueue: opts.useQueue });
     }
 
     // GET /stats
@@ -98,7 +99,7 @@ export async function handleRequest(request, db, apiKeys, opts = {}) {
 
 // --- Individual handlers ---
 
-async function handleTrack(request, db, projectTokens) {
+async function handleTrack(request, db, projectTokens, opts = {}) {
   const body = await request.json();
   const { project, event, properties, user_id, timestamp, token } = body;
 
@@ -111,13 +112,19 @@ async function handleTrack(request, db, projectTokens) {
     return { response: json({ error: tokenAuth.error }, 403) };
   }
 
-  const writeOp = db.trackEvent({ project, event, properties, user_id, timestamp })
+  const eventData = { project, event, properties, user_id, timestamp: timestamp || Date.now() };
+
+  if (opts.useQueue) {
+    return { response: json({ ok: true }), queueMessages: [eventData] };
+  }
+
+  const writeOp = db.trackEvent(eventData)
     .catch(err => console.error('Track write failed:', err));
 
   return { response: json({ ok: true }), writeOps: [writeOp] };
 }
 
-async function handleTrackBatch(request, db, projectTokens) {
+async function handleTrackBatch(request, db, projectTokens, opts = {}) {
   const body = await request.json();
   const { events, token } = body;
 
@@ -135,7 +142,20 @@ async function handleTrackBatch(request, db, projectTokens) {
     return { response: json({ error: tokenAuth.error }, 403) };
   }
 
-  const writeOp = db.trackBatch(events)
+  // Normalize events with timestamps
+  const normalized = events.map(e => ({
+    project: e.project,
+    event: e.event,
+    properties: e.properties,
+    user_id: e.user_id,
+    timestamp: e.timestamp || Date.now(),
+  }));
+
+  if (opts.useQueue) {
+    return { response: json({ ok: true, count: events.length }), queueMessages: normalized };
+  }
+
+  const writeOp = db.trackBatch(normalized)
     .catch(err => console.error('Batch write failed:', err));
 
   return { response: json({ ok: true, count: events.length }), writeOps: [writeOp] };
