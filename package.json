@@ -1,0 +1,24 @@
+{
+  "name": "agent-analytics",
+  "version": "1.0.0",
+  "description": "Simple analytics for AI agents - Cloudflare Workers + D1",
+  "main": "src/worker.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:create": "wrangler d1 create agent-analytics",
+    "db:init": "wrangler d1 execute agent-analytics --file=./schema.sql",
+    "db:init:local": "wrangler d1 execute agent-analytics --local --file=./schema.sql"
+  },
+  "keywords": [
+    "analytics",
+    "cloudflare",
+    "workers",
+    "ai-agents"
+  ],
+  "author": "Danny Shmueli",
+  "license": "MIT",
+  "devDependencies": {
+    "wrangler": "^4.63.0"
+  }
+}

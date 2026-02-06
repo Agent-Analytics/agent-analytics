@@ -1,0 +1,14 @@
+name = "agent-analytics"
+main = "src/worker.js"
+compatibility_date = "2024-01-01"
+account_id = "139518248fb33aa103fcd01dda727d2b"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "agent-analytics"
+database_id = "53211172-d64e-4a5f-bbbb-be088e9f1907"
+
+[vars]
+ALLOWED_ORIGINS = "https://clawflows.com,http://localhost:3000"
+# API_KEYS set via: wrangler secret put API_KEYS
+# Format: comma-separated keys, e.g. "key1,key2"
