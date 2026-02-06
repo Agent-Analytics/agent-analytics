@@ -27,11 +27,17 @@ export default {
 
     if (queue && queueMessages && queueMessages.length > 0) {
       // Enqueue for async processing — instant response to client
+      // If enqueue fails, fall back to direct write
       ctx.waitUntil(
         queue.sendBatch(queueMessages.map(msg => ({ body: msg })))
+          .catch(err => {
+            console.error('Queue enqueue failed, falling back to direct write:', err);
+            return db.trackBatch(queueMessages);
+          })
+          .catch(err => console.error('Direct write fallback also failed:', err))
       );
     } else if (writeOps) {
-      // Direct write fallback (no queue configured)
+      // Direct write (no queue configured) — still non-blocking via waitUntil
       for (const op of writeOps) {
         ctx.waitUntil(op);
       }

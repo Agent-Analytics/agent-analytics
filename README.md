@@ -40,9 +40,11 @@ npx wrangler deploy
 
 That's it. You'll get a URL like `https://agent-analytics.YOUR-SUBDOMAIN.workers.dev`.
 
-#### Optional: Enable Queue (recommended for production)
+#### Optional: Enable Queue (nice-to-have, not required)
 
-By default, events write directly to D1. For higher throughput and automatic retries, enable Cloudflare Queues:
+By default, events write directly to D1 via `ctx.waitUntil()` — this is already non-blocking (your response returns instantly, the write happens in the background). This works great for most sites.
+
+For very high-traffic sites, you can enable [Cloudflare Queues](https://developers.cloudflare.com/queues/) for automatic batching and retries. **Note:** Queues requires the Workers Paid plan ($5/month). The free plan works perfectly without it.
 
 ```bash
 # Create the queue
@@ -55,7 +57,7 @@ Then uncomment the `[[queues.producers]]` and `[[queues.consumers]]` sections in
 npx wrangler deploy
 ```
 
-With queues enabled, `/track` responds instantly and events are batch-written to D1 asynchronously (up to 100 events per batch, flushed every 5 seconds). The API is identical — no client-side changes needed.
+With queues enabled, events are batch-written to D1 asynchronously (up to 100 events per batch, flushed every 5 seconds). If the queue ever fails, events automatically fall back to direct write. The API is identical — no client-side changes needed.
 
 ### Self-Hosted (Node.js)
 
