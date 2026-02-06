@@ -13,9 +13,6 @@ binding = "DB"
 database_name = "agent-analytics"
 database_id = "53211172-d64e-4a5f-bbbb-be088e9f1907"
 
-[[rules]]
-type = "Text"
-globs = ["**/*.html"]
 
 [vars]
 ALLOWED_ORIGINS = "https://clawflows.com,http://localhost:3000"

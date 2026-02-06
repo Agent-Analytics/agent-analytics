@@ -3,8 +3,6 @@
  * Cloudflare Worker + D1
  */
 
-import LANDING_HTML from './landing.html';
-
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -369,13 +367,6 @@ export default {
       if (path === '/tracker.js') {
         return new Response(TRACKER_JS, {
           headers: { 'Content-Type': 'application/javascript', ...CORS_HEADERS },
-        });
-      }
-
-      // Landing page
-      if (path === '/' && request.method === 'GET') {
-        return new Response(LANDING_HTML, {
-          headers: { 'Content-Type': 'text/html;charset=UTF-8' },
         });
       }
 
