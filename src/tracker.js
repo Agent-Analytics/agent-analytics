@@ -46,18 +46,15 @@ export const TRACKER_JS = `
         timestamp: Date.now()
       };
       
-      // sendBeacon with JSON — simple request, no preflight
+      // Plain fetch with no credentials — simple CORS, no preflight
       var data = JSON.stringify(payload);
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon(ENDPOINT, new Blob([data], { type: 'application/json' }));
-      } else {
-        fetch(ENDPOINT, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: data,
-          keepalive: true
-        }).catch(function() {});
-      }
+      fetch(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: data,
+        keepalive: true,
+        credentials: 'omit'
+      }).catch(function() {});
     },
     
     identify: function(id) {
