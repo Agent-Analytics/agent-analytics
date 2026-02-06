@@ -10,13 +10,13 @@
  * (e.g. ctx.waitUntil on Cloudflare).
  */
 
-import { validateApiKey, validateWriteAccess } from './auth.js';
+import { validateApiKey, validateProjectToken } from './auth.js';
 import { TRACKER_JS } from './tracker.js';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-API-Key, X-Write-Key',
+  'Access-Control-Allow-Headers': 'Content-Type, X-API-Key',
 };
 
 function json(data, status = 200) {
@@ -31,7 +31,7 @@ function json(data, status = 200) {
  * @param {Request} request
  * @param {import('./db/adapter.js').DbAdapter} db
  * @param {string} apiKeys - Comma-separated read API keys from env
- * @param {{ writeKeys?: string, allowedOrigins?: string }} opts - Write auth config
+ * @param {{ projectTokens?: string }} opts - Project token config
  * @returns {Promise<{ response: Response, writeOps?: Promise[] }>}
  */
 export async function handleRequest(request, db, apiKeys, opts = {}) {
@@ -46,20 +46,12 @@ export async function handleRequest(request, db, apiKeys, opts = {}) {
   try {
     // POST /track
     if (path === '/track' && request.method === 'POST') {
-      const writeAuth = validateWriteAccess(request, url, opts);
-      if (!writeAuth.valid) {
-        return { response: json({ error: writeAuth.error || 'unauthorized' }, 403) };
-      }
-      return await handleTrack(request, db);
+      return await handleTrack(request, db, opts.projectTokens);
     }
 
     // POST /track/batch
     if (path === '/track/batch' && request.method === 'POST') {
-      const writeAuth = validateWriteAccess(request, url, opts);
-      if (!writeAuth.valid) {
-        return { response: json({ error: writeAuth.error || 'unauthorized' }, 403) };
-      }
-      return await handleTrackBatch(request, db);
+      return await handleTrackBatch(request, db, opts.projectTokens);
     }
 
     // GET /stats
@@ -105,12 +97,17 @@ export async function handleRequest(request, db, apiKeys, opts = {}) {
 
 // --- Individual handlers ---
 
-async function handleTrack(request, db) {
+async function handleTrack(request, db, projectTokens) {
   const body = await request.json();
-  const { project, event, properties, user_id, timestamp } = body;
+  const { project, event, properties, user_id, timestamp, token } = body;
 
   if (!project || !event) {
     return { response: json({ error: 'project and event required' }, 400) };
+  }
+
+  const tokenAuth = validateProjectToken(token, projectTokens);
+  if (!tokenAuth.valid) {
+    return { response: json({ error: tokenAuth.error }, 403) };
   }
 
   const writeOp = db.trackEvent({ project, event, properties, user_id, timestamp })
@@ -119,15 +116,22 @@ async function handleTrack(request, db) {
   return { response: json({ ok: true }), writeOps: [writeOp] };
 }
 
-async function handleTrackBatch(request, db) {
+async function handleTrackBatch(request, db, projectTokens) {
   const body = await request.json();
-  const events = body.events || [];
+  const { events, token } = body;
 
   if (!Array.isArray(events) || events.length === 0) {
     return { response: json({ error: 'events array required' }, 400) };
   }
   if (events.length > 100) {
     return { response: json({ error: 'max 100 events per batch' }, 400) };
+  }
+
+  // Token can be at batch level or per-event (batch level takes precedence)
+  const batchToken = token || (events[0] && events[0].token);
+  const tokenAuth = validateProjectToken(batchToken, projectTokens);
+  if (!tokenAuth.valid) {
+    return { response: json({ error: tokenAuth.error }, 403) };
   }
 
   const writeOp = db.trackBatch(events)

@@ -47,21 +47,23 @@ PORT=3000 DB_PATH=./data/analytics.db API_KEYS=key1,key2 npm start
 A live demo runs at `api.agentanalytics.sh`. Send a test event right from your terminal:
 
 ```bash
-# 1. Track an event (no auth needed)
+# 1. Track an event (token in body — no special headers needed)
 curl -X POST https://api.agentanalytics.sh/track \
   -H "Content-Type: application/json" \
   -d '{
     "project": "demo",
+    "token": "YOUR_PROJECT_TOKEN",
     "event": "hello_world",
     "properties": { "source": "readme" },
     "user_id": "test_user_1"
   }'
 # → {"ok": true}
 
-# 2. Track a batch
+# 2. Track a batch (token at batch level)
 curl -X POST https://api.agentanalytics.sh/track/batch \
   -H "Content-Type: application/json" \
   -d '{
+    "token": "YOUR_PROJECT_TOKEN",
     "events": [
       { "project": "demo", "event": "signup", "user_id": "u1", "properties": { "plan": "free" } },
       { "project": "demo", "event": "signup", "user_id": "u2", "properties": { "plan": "pro" } }
@@ -84,64 +86,42 @@ To get an API key for the hosted version, [contact us](https://agentanalytics.sh
 
 ## Security
 
-Track endpoints (`/track`, `/track/batch`) are open by default for easy setup. For production, lock them down:
+Two types of auth, same as Mixpanel:
 
-### Write Keys (recommended)
+### Project Token (ingestion)
 
-Require a secret key for all write operations — browser and server-side.
+Public token embedded in your client-side code. Passed in the **request body** — no custom headers, no CORS issues. Identifies the project but isn't a secret.
 
 ```bash
-# Cloudflare
-npx wrangler secret put WRITE_KEYS
-# Enter: "wk_abc123,wk_def456"
-
-# Self-hosted
-WRITE_KEYS=wk_abc123,wk_def456 npm start
+# Set token(s)
+npx wrangler secret put PROJECT_TOKENS    # Cloudflare
+PROJECT_TOKENS=pt_abc123 npm start         # Self-hosted
 ```
 
-Clients pass the key via header or query param:
+Token goes in the body alongside event data:
 ```bash
 curl -X POST https://your-domain.com/track \
-  -H "X-Write-Key: wk_abc123" \
   -H "Content-Type: application/json" \
-  -d '{"project":"myapp","event":"signup"}'
+  -d '{"project":"myapp", "token":"pt_abc123", "event":"signup"}'
 ```
 
-In the browser tracker (two options):
+Browser tracker:
 ```html
-<!-- Option 1: via data attribute -->
-<script src="https://your-domain.com/tracker.js" data-project="myapp" data-write-key="wk_abc123"></script>
-
-<!-- Option 2: set at runtime -->
-<script>
-  window.aa.writeKey = 'wk_abc123';
-</script>
+<script src="https://your-domain.com/tracker.js" data-project="myapp" data-token="pt_abc123"></script>
 ```
 
-> **Note:** Write keys in client-side code are visible to users (like Mixpanel project tokens). They prevent random spam but aren't true secrets. For sensitive projects, combine with `ALLOWED_ORIGINS` so only your domains can track.
+If `PROJECT_TOKENS` isn't set, ingestion is open (dev/self-host mode).
 
-### Origin Allowlist
+### API Key (query/read)
 
-Restrict browser requests to specific domains. Server-side requests (no `Origin` header) need a write key.
+Private key for reading data. Passed via `X-API-Key` header or `?key=` param. **Never expose in client code.**
 
 ```bash
-# Cloudflare (already in wrangler.toml [vars])
-ALLOWED_ORIGINS = "https://myapp.com,https://staging.myapp.com"
-
-# Self-hosted
-ALLOWED_ORIGINS=https://myapp.com npm start
+npx wrangler secret put API_KEYS           # Cloudflare
+API_KEYS=your-secret-key npm start          # Self-hosted
 ```
 
-### Security Matrix
-
-| Config | Browser request | Server-side request |
-|--------|----------------|-------------------|
-| Nothing set | ✅ Open | ✅ Open |
-| `ALLOWED_ORIGINS` only | ✅ If origin matches | ✅ Open |
-| `WRITE_KEYS` only | ✅ If key valid | ✅ If key valid |
-| Both set | ✅ If origin matches OR key valid | ✅ If key valid |
-
-**Read endpoints** (`/stats`, `/events`, `/query`, `/properties`) always require an `API_KEYS` key.
+Required for: `/stats`, `/events`, `/query`, `/properties`.
 
 ## Architecture
 

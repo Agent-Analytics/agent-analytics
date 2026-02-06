@@ -1,18 +1,17 @@
 /**
- * Auth & origin validation
+ * Auth validation
  *
- * Two types of keys:
- * - API_KEYS: Read access (GET /stats, /events, /properties, POST /query)
- * - WRITE_KEYS: Write access (POST /track, /track/batch)
+ * Two auth models:
+ * - Project Token: Public, embedded in client JS. Passed in request body
+ *   alongside event data. Used for ingestion (/track, /track/batch).
+ *   Like Mixpanel's project token — not a secret, just identifies the project.
  *
- * Origin checking:
- * - ALLOWED_ORIGINS: Comma-separated list of allowed origins for browser requests
- * - If set, browser requests without a matching Origin are rejected
- * - Server-side requests (no Origin header) must use a WRITE_KEY instead
+ * - API Key: Private, server-side only. Passed via X-API-Key header or
+ *   ?key= query param. Used for reading data (/stats, /events, /query, /properties).
  */
 
 /**
- * Validate a read API key.
+ * Validate a read API key (for query endpoints).
  * @param {Request} request
  * @param {URL} url
  * @param {string} apiKeysStr - Comma-separated allowed read keys
@@ -27,57 +26,28 @@ export function validateApiKey(request, url, apiKeysStr) {
 }
 
 /**
- * Validate write access for track endpoints.
+ * Validate a project token from the request body (for ingestion endpoints).
+ * Token is passed in the JSON body as "token" field.
+ * If no PROJECT_TOKENS are configured, ingestion is open (dev mode).
  *
- * Security model:
- * - If WRITE_KEYS is set → require X-Write-Key header or ?write_key= param
- * - If ALLOWED_ORIGINS is set → browser requests must have matching Origin
- * - If neither is set → open access (dev/testing mode)
- *
- * @param {Request} request
- * @param {URL} url
- * @param {{ writeKeys?: string, allowedOrigins?: string }} opts
+ * @param {string} bodyToken - Token from the request body
+ * @param {string} projectTokensStr - Comma-separated valid project tokens (from env)
  * @returns {{ valid: boolean, error?: string }}
  */
-export function validateWriteAccess(request, url, opts = {}) {
-  const { writeKeys, allowedOrigins } = opts;
-
-  // Check write key first — if provided and valid, always allow
-  const writeKey = request.headers.get('X-Write-Key') || url.searchParams.get('write_key');
-  if (writeKey && writeKeys) {
-    const keys = writeKeys.split(',').map(k => k.trim());
-    if (keys.includes(writeKey)) {
-      return { valid: true };
-    }
-    // Key provided but invalid
-    return { valid: false, error: 'invalid write key' };
+export function validateProjectToken(bodyToken, projectTokensStr) {
+  // No tokens configured — open access (dev/self-host mode)
+  if (!projectTokensStr) {
+    return { valid: true };
   }
 
-  // If write keys are configured but none provided, check origin as fallback
-  const origin = request.headers.get('Origin');
-
-  if (allowedOrigins) {
-    const allowed = allowedOrigins.split(',').map(o => o.trim().toLowerCase());
-
-    if (origin) {
-      // Browser request — validate origin
-      if (!allowed.includes(origin.toLowerCase())) {
-        return { valid: false, error: 'origin not allowed' };
-      }
-      return { valid: true };
-    }
-
-    // No origin header (server-side request) — require write key if configured
-    if (writeKeys) {
-      return { valid: false, error: 'write key required for server-side requests' };
-    }
+  if (!bodyToken) {
+    return { valid: false, error: 'token required' };
   }
 
-  // If write keys configured but no key provided and no origin check passed
-  if (writeKeys && !writeKey) {
-    return { valid: false, error: 'write key required' };
+  const tokens = projectTokensStr.split(',').map(t => t.trim());
+  if (!tokens.includes(bodyToken)) {
+    return { valid: false, error: 'invalid token' };
   }
 
-  // Neither WRITE_KEYS nor ALLOWED_ORIGINS set — open access (dev mode)
   return { valid: true };
 }
