@@ -1,6 +1,6 @@
 # Agent Analytics
 
-Simple, self-hostable analytics for AI agents and web apps. Track events, query stats, zero dependencies on third-party analytics services.
+Simple, self-hostable web analytics that your AI agent can read. Same idea as Google Analytics — add a JS snippet to your site — but with an API your agent queries instead of dashboards you'll never open.
 
 **Deploy to Cloudflare Workers** (free tier works great) or **self-host with Node.js + SQLite**.
 
@@ -9,24 +9,36 @@ Simple, self-hostable analytics for AI agents and web apps. Track events, query 
 ### Cloudflare Workers (recommended)
 
 ```bash
-# Clone
+# 1. Clone
 git clone https://github.com/Agent-Analytics/agent-analytics.git
 cd agent-analytics
 
-# Create D1 database
+# 2. Create a D1 database
 npx wrangler d1 create agent-analytics
-# Update wrangler.toml with the database_id from output
+```
 
-# Initialize schema
-npx wrangler d1 execute agent-analytics --file=./schema.sql
+This outputs something like:
 
-# Set secrets
-npx wrangler secret put API_KEYS          # Read key (for querying data)
-npx wrangler secret put PROJECT_TOKENS    # Project token (for ingestion)
+```
+database_name = "agent-analytics"
+database_id = "abc123-your-id-here"
+```
 
-# Deploy
+**Update `wrangler.toml`** with your `database_id` (and optionally your `account_id`). The binding must stay as `DB`.
+
+```bash
+# 3. Initialize the schema (note: --remote is required!)
+npx wrangler d1 execute agent-analytics --remote --file=./schema.sql
+
+# 4. Set secrets
+echo "your-secret-read-key" | npx wrangler secret put API_KEYS
+echo "pt_your-project-token" | npx wrangler secret put PROJECT_TOKENS
+
+# 5. Deploy
 npx wrangler deploy
 ```
+
+That's it. You'll get a URL like `https://agent-analytics.YOUR-SUBDOMAIN.workers.dev`.
 
 ### Self-Hosted (Node.js)
 
@@ -42,52 +54,12 @@ API_KEYS=my-secret-key PROJECT_TOKENS=pt_my-token npm start
 PORT=3000 DB_PATH=./data/analytics.db API_KEYS=key1,key2 PROJECT_TOKENS=pt_abc npm start
 ```
 
-## Usage
-
-After deploying, track an event from your terminal:
-
-```bash
-# 1. Track an event (token in body — no special headers)
-curl -X POST https://your-domain.com/track \
-  -H "Content-Type: application/json" \
-  -d '{
-    "project": "my-app",
-    "token": "YOUR_PROJECT_TOKEN",
-    "event": "hello_world",
-    "properties": { "source": "readme" },
-    "user_id": "test_user_1"
-  }'
-# → {"ok": true}
-
-# 2. Track a batch
-curl -X POST https://your-domain.com/track/batch \
-  -H "Content-Type: application/json" \
-  -d '{
-    "token": "YOUR_PROJECT_TOKEN",
-    "events": [
-      { "project": "my-app", "event": "signup", "user_id": "u1", "properties": { "plan": "free" } },
-      { "project": "my-app", "event": "signup", "user_id": "u2", "properties": { "plan": "pro" } }
-    ]
-  }'
-# → {"ok": true, "count": 2}
-
-# 3. Query your data (API key required for reads)
-curl -X POST https://your-domain.com/query \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: YOUR_API_KEY" \
-  -d '{
-    "project": "my-app",
-    "metrics": ["event_count", "unique_users"],
-    "group_by": ["event"]
-  }'
-```
-
 ## Add to Your Website
 
-Drop one line before `</body>`:
+Drop one line before `</body>` — just like Google Analytics:
 
 ```html
-<script src="https://your-domain.com/tracker.js" data-project="my-app" data-token="YOUR_PROJECT_TOKEN"></script>
+<script src="https://your-analytics-url.com/tracker.js" data-project="my-site" data-token="YOUR_PROJECT_TOKEN"></script>
 ```
 
 This auto-tracks page views with URL, referrer, and screen size. For custom events:
@@ -103,28 +75,51 @@ window.aa.identify('user_123');
 window.aa.page('Dashboard');
 ```
 
+## Your Agent Reads the Data
+
+The whole point: your AI assistant queries the API instead of you logging into a dashboard.
+
+```bash
+# Your agent runs this:
+curl "https://your-analytics-url.com/stats?project=my-site&days=7" \
+  -H "X-API-Key: YOUR_API_KEY"
+```
+
+Response:
+```json
+{
+  "totals": { "unique_users": 1203, "total_events": 4821 },
+  "events": [
+    { "event": "page_view", "count": 3920 },
+    { "event": "signup_click", "count": 127 }
+  ]
+}
+```
+
+Your agent turns that into: *"4,821 pageviews from 1,203 unique visitors this week, up 23% from last week. 127 signup clicks at 2.6% conversion."*
+
 ## Security
 
-Two types of auth (same model as Mixpanel):
+Two types of auth — same model as Mixpanel:
 
 ### Project Token (ingestion)
 
-Public token embedded in client-side code. Passed in the **request body** — no custom headers, no CORS preflight, zero issues. Like Mixpanel's project token: identifies the project but isn't a secret.
+Public token embedded in client-side code. Passed in the **request body** — no custom headers needed, no CORS preflight. Like Mixpanel's project token: identifies the project but isn't a secret.
 
 ```bash
-npx wrangler secret put PROJECT_TOKENS    # Cloudflare
-PROJECT_TOKENS=pt_abc123 npm start         # Self-hosted
+echo "pt_your-token" | npx wrangler secret put PROJECT_TOKENS    # Cloudflare
+PROJECT_TOKENS=pt_abc123 npm start                                 # Self-hosted
 ```
 
-If `PROJECT_TOKENS` isn't set, ingestion is open (dev/self-host mode).
+If `PROJECT_TOKENS` isn't set, ingestion is open (good for dev/self-host).
 
 ### API Key (query/read)
 
 Private key for reading data. Passed via `X-API-Key` header or `?key=` param. **Never expose in client code.**
 
 ```bash
-npx wrangler secret put API_KEYS           # Cloudflare
-API_KEYS=your-secret-key npm start          # Self-hosted
+echo "your-secret-key" | npx wrangler secret put API_KEYS    # Cloudflare
+API_KEYS=your-secret-key npm start                             # Self-hosted
 ```
 
 Required for: `/stats`, `/events`, `/query`, `/properties`.
@@ -157,7 +152,7 @@ Track a single event.
 
 ```json
 {
-  "project": "my-app",
+  "project": "my-site",
   "token": "pt_your_project_token",
   "event": "page_view",
   "properties": { "page": "/home", "browser": "chrome" },
@@ -183,8 +178,8 @@ Track up to 100 events at once. Token can be at the batch level or per-event.
 {
   "token": "pt_your_project_token",
   "events": [
-    { "project": "my-app", "event": "click", "user_id": "u1" },
-    { "project": "my-app", "event": "scroll", "user_id": "u2" }
+    { "project": "my-site", "event": "click", "user_id": "u1" },
+    { "project": "my-site", "event": "scroll", "user_id": "u2" }
   ]
 }
 ```
@@ -198,7 +193,7 @@ Pass your key via `X-API-Key` header or `?key=` query parameter.
 Aggregated overview for a project.
 
 ```
-GET /stats?project=my-app&days=7
+GET /stats?project=my-site&days=7
 ```
 
 Returns daily breakdown (unique users + total events), top events by count, and period totals.
@@ -208,7 +203,7 @@ Returns daily breakdown (unique users + total events), top events by count, and 
 Raw event log with filters.
 
 ```
-GET /events?project=my-app&event=page_view&days=7&limit=100
+GET /events?project=my-site&event=page_view&days=7&limit=100
 ```
 
 #### `POST /query`
@@ -217,7 +212,7 @@ Flexible analytics query — the power endpoint. Supports metrics, grouping, fil
 
 ```json
 {
-  "project": "my-app",
+  "project": "my-site",
   "metrics": ["event_count", "unique_users"],
   "group_by": ["event", "date"],
   "filters": [
@@ -246,7 +241,7 @@ Flexible analytics query — the power endpoint. Supports metrics, grouping, fil
 Discover event names and property keys for a project. Useful for building dynamic queries.
 
 ```
-GET /properties?project=my-app&days=30
+GET /properties?project=my-site&days=30
 ```
 
 Returns event names with counts, first/last seen dates, and all known property keys.
