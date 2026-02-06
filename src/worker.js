@@ -207,6 +207,157 @@ export default {
         return jsonResponse({ project, events: results });
       }
 
+      // POST /query - flexible analytics query (non-blocking reads)
+      if (path === '/query' && request.method === 'POST') {
+        const apiKey = request.headers.get('X-API-Key');
+        if (!env.API_KEYS || !apiKey || !env.API_KEYS.split(',').includes(apiKey)) {
+          return jsonResponse({ error: 'unauthorized - API key required' }, 401);
+        }
+
+        const body = await request.json();
+        const { project, metrics, filters, date_from, date_to, group_by, order_by, order, limit: queryLimit } = body;
+
+        if (!project) {
+          return jsonResponse({ error: 'project required' }, 400);
+        }
+
+        // Validate metrics
+        const ALLOWED_METRICS = ['event_count', 'unique_users'];
+        const requestedMetrics = metrics || ['event_count'];
+        for (const m of requestedMetrics) {
+          if (!ALLOWED_METRICS.includes(m)) {
+            return jsonResponse({ error: `invalid metric: ${m}. allowed: ${ALLOWED_METRICS.join(', ')}` }, 400);
+          }
+        }
+
+        // Validate group_by
+        const ALLOWED_GROUP_BY = ['event', 'date', 'user_id'];
+        const groupBy = group_by || [];
+        for (const g of groupBy) {
+          if (!ALLOWED_GROUP_BY.includes(g)) {
+            return jsonResponse({ error: `invalid group_by: ${g}. allowed: ${ALLOWED_GROUP_BY.join(', ')}` }, 400);
+          }
+        }
+
+        // Build SELECT clause
+        const selectParts = [];
+        if (groupBy.length > 0) {
+          selectParts.push(...groupBy);
+        }
+        for (const m of requestedMetrics) {
+          if (m === 'event_count') selectParts.push('COUNT(*) as event_count');
+          if (m === 'unique_users') selectParts.push('COUNT(DISTINCT user_id) as unique_users');
+        }
+        if (selectParts.length === 0) selectParts.push('COUNT(*) as event_count');
+
+        // Build WHERE clause
+        const whereParts = ['project_id = ?'];
+        const params = [project];
+
+        const fromDate = date_from || daysAgo(7);
+        const toDate = date_to || today();
+        whereParts.push('date >= ?', 'date <= ?');
+        params.push(fromDate, toDate);
+
+        // Apply filters
+        if (filters && Array.isArray(filters)) {
+          const FILTER_OPS = { eq: '=', neq: '!=', gt: '>', lt: '<', gte: '>=', lte: '<=' };
+          const FILTERABLE_FIELDS = ['event', 'user_id', 'date'];
+
+          for (const f of filters) {
+            if (!f.field || !f.op || f.value === undefined) continue;
+
+            if (FILTERABLE_FIELDS.includes(f.field)) {
+              const sqlOp = FILTER_OPS[f.op];
+              if (!sqlOp) {
+                return jsonResponse({ error: `invalid filter op: ${f.op}. allowed: ${Object.keys(FILTER_OPS).join(', ')}` }, 400);
+              }
+              whereParts.push(`${f.field} ${sqlOp} ?`);
+              params.push(f.value);
+            } else if (f.field.startsWith('properties.')) {
+              // JSON property filter via json_extract
+              const propKey = f.field.replace('properties.', '');
+              const sqlOp = FILTER_OPS[f.op];
+              if (!sqlOp) continue;
+              whereParts.push(`json_extract(properties, '$.${propKey}') ${sqlOp} ?`);
+              params.push(f.value);
+            }
+          }
+        }
+
+        let query = `SELECT ${selectParts.join(', ')} FROM events WHERE ${whereParts.join(' AND ')}`;
+
+        if (groupBy.length > 0) {
+          query += ` GROUP BY ${groupBy.join(', ')}`;
+        }
+
+        // ORDER BY
+        const ALLOWED_ORDER = ['event_count', 'unique_users', 'date', 'event'];
+        const orderField = order_by && ALLOWED_ORDER.includes(order_by) ? order_by : (groupBy.includes('date') ? 'date' : 'event_count');
+        const orderDir = order === 'asc' ? 'ASC' : 'DESC';
+        query += ` ORDER BY ${orderField} ${orderDir}`;
+
+        const maxLimit = Math.min(parseInt(queryLimit) || 100, 1000);
+        query += ` LIMIT ?`;
+        params.push(maxLimit);
+
+        const result = await env.DB.prepare(query).bind(...params).all();
+
+        return jsonResponse({
+          project,
+          period: { from: fromDate, to: toDate },
+          metrics: requestedMetrics,
+          group_by: groupBy,
+          rows: result.results,
+          count: result.results.length,
+        });
+      }
+
+      // GET /properties - discover event names and property keys
+      if (path === '/properties' && request.method === 'GET') {
+        const apiKey = request.headers.get('X-API-Key') || url.searchParams.get('key');
+        if (!env.API_KEYS || !apiKey || !env.API_KEYS.split(',').includes(apiKey)) {
+          return jsonResponse({ error: 'unauthorized - API key required' }, 401);
+        }
+
+        const project = url.searchParams.get('project');
+        if (!project) {
+          return jsonResponse({ error: 'project required' }, 400);
+        }
+
+        const days = parseInt(url.searchParams.get('days') || '30');
+        const fromDate = daysAgo(days);
+
+        // Get event names with counts
+        const events = await env.DB.prepare(
+          `SELECT event, COUNT(*) as count, COUNT(DISTINCT user_id) as unique_users,
+                  MIN(date) as first_seen, MAX(date) as last_seen
+           FROM events WHERE project_id = ? AND date >= ?
+           GROUP BY event ORDER BY count DESC`
+        ).bind(project, fromDate).all();
+
+        // Sample property keys from recent events (top 100)
+        const sample = await env.DB.prepare(
+          `SELECT DISTINCT properties FROM events 
+           WHERE project_id = ? AND properties IS NOT NULL AND date >= ?
+           ORDER BY timestamp DESC LIMIT 100`
+        ).bind(project, fromDate).all();
+
+        const propKeys = new Set();
+        for (const row of sample.results) {
+          try {
+            const props = JSON.parse(row.properties);
+            Object.keys(props).forEach(k => propKeys.add(k));
+          } catch (e) {}
+        }
+
+        return jsonResponse({
+          project,
+          events: events.results,
+          property_keys: [...propKeys].sort(),
+        });
+      }
+
       // GET /health
       if (path === '/health') {
         return jsonResponse({ status: 'ok', service: 'agent-analytics' });
