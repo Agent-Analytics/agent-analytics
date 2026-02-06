@@ -42,13 +42,13 @@ API_KEYS=my-secret-key PROJECT_TOKENS=pt_my-token npm start
 PORT=3000 DB_PATH=./data/analytics.db API_KEYS=key1,key2 PROJECT_TOKENS=pt_abc npm start
 ```
 
-## Try It Now
+## Usage
 
-Track an event from your terminal:
+After deploying, track an event from your terminal:
 
 ```bash
 # 1. Track an event (token in body — no special headers)
-curl -X POST https://api.agentanalytics.sh/track \
+curl -X POST https://your-domain.com/track \
   -H "Content-Type: application/json" \
   -d '{
     "project": "my-app",
@@ -60,7 +60,7 @@ curl -X POST https://api.agentanalytics.sh/track \
 # → {"ok": true}
 
 # 2. Track a batch
-curl -X POST https://api.agentanalytics.sh/track/batch \
+curl -X POST https://your-domain.com/track/batch \
   -H "Content-Type: application/json" \
   -d '{
     "token": "YOUR_PROJECT_TOKEN",
@@ -72,7 +72,7 @@ curl -X POST https://api.agentanalytics.sh/track/batch \
 # → {"ok": true, "count": 2}
 
 # 3. Query your data (API key required for reads)
-curl -X POST https://api.agentanalytics.sh/query \
+curl -X POST https://your-domain.com/query \
   -H "Content-Type: application/json" \
   -H "X-API-Key: YOUR_API_KEY" \
   -d '{
@@ -87,7 +87,7 @@ curl -X POST https://api.agentanalytics.sh/query \
 Drop one line before `</body>`:
 
 ```html
-<script src="https://api.agentanalytics.sh/tracker.js" data-project="my-app" data-token="YOUR_PROJECT_TOKEN"></script>
+<script src="https://your-domain.com/tracker.js" data-project="my-app" data-token="YOUR_PROJECT_TOKEN"></script>
 ```
 
 This auto-tracks page views with URL, referrer, and screen size. For custom events:
