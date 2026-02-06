@@ -1,174 +1,174 @@
 # Agent Analytics
 
-Simple, free analytics for AI agents. Built on Cloudflare Workers + D1.
+Simple, self-hostable analytics for AI agents and web apps. Track events, query stats, zero dependencies on third-party analytics services.
 
-## Deploy (5 minutes)
+**Deploy to Cloudflare Workers** (free tier works great) or **self-host with Node.js + SQLite**.
 
-### 1. Install Wrangler CLI
-```bash
-npm install -g wrangler
-wrangler login
-```
+## Quick Start
 
-### 2. Create D1 Database
-```bash
-cd /path/to/agent-analytics
-wrangler d1 create agent-analytics
-```
-
-Copy the `database_id` from output and paste into `wrangler.toml`.
-
-### 3. Initialize Schema
-```bash
-wrangler d1 execute agent-analytics --file=./schema.sql
-```
-
-### 4. Deploy Worker
-```bash
-wrangler deploy
-```
-
-You'll get a URL like: `https://agent-analytics.<your-subdomain>.workers.dev`
-
----
-
-## Usage
-
-### Client-Side (Web)
-
-Add to your HTML:
-```html
-<script src="https://agent-analytics.YOUR.workers.dev/tracker.js" 
-        data-project="myproject"></script>
-```
-
-Then track events:
-```javascript
-// Auto page_view happens on load
-
-// Custom events
-aa.track('button_click', { button: 'signup' });
-aa.track('form_submit', { form: 'contact' });
-
-// Identify logged-in users
-aa.identify('user_123');
-```
-
-### Server-Side (Agents, APIs)
+### Cloudflare Workers (recommended)
 
 ```bash
-# Track an event
-curl -X POST https://agent-analytics.YOUR.workers.dev/track \
-  -H "Content-Type: application/json" \
-  -d '{
-    "project": "myproject",
-    "event": "task_completed",
-    "properties": {"task": "email_sent", "duration_ms": 1500},
-    "user_id": "agent_cluka"
-  }'
+# Clone
+git clone https://github.com/Agent-Analytics/agent-analytics.git
+cd agent-analytics
 
-# Get stats
-curl "https://agent-analytics.YOUR.workers.dev/stats?project=myproject&days=7"
+# Create D1 database
+npx wrangler d1 create agent-analytics
+# Update wrangler.toml with the database_id from output
 
-# Get raw events
-curl "https://agent-analytics.YOUR.workers.dev/events?project=myproject&event=page_view&days=7&limit=50"
+# Initialize schema
+npx wrangler d1 execute agent-analytics --file=./schema.sql
+
+# Set your API key (for reading stats)
+npx wrangler secret put API_KEYS
+# Enter a comma-separated list of keys, e.g. "my-secret-key"
+
+# Deploy
+npx wrangler deploy
 ```
 
----
+### Self-Hosted (Node.js)
+
+```bash
+git clone https://github.com/Agent-Analytics/agent-analytics.git
+cd agent-analytics
+npm install
+
+# Run (SQLite database auto-created)
+API_KEYS=my-secret-key npm start
+
+# Or with options:
+PORT=3000 DB_PATH=./data/analytics.db API_KEYS=key1,key2 npm start
+```
+
+## Architecture
+
+```
+src/
+  handlers.js          — Pure request handling (Web API Request/Response)
+  auth.js              — API key validation
+  tracker.js           — Embeddable client-side tracking script
+  db/
+    adapter.js         — Shared types and helpers
+    d1.js              — Cloudflare D1 adapter
+    sqlite.js          — better-sqlite3 adapter (self-host)
+  platforms/
+    cloudflare.js      — CF Worker entry (ctx.waitUntil for non-blocking writes)
+    node.js            — Node.js HTTP server entry
+```
+
+Handlers are platform-agnostic. SQL lives in the database adapters. Platform entry points just wire things together.
 
 ## API Reference
 
-### POST /track
-Ingest an event.
+### Track Events (no auth required)
+
+#### `POST /track`
+
+Track a single event.
 
 ```json
 {
-  "project": "myproject",      // required
-  "event": "page_view",        // required
-  "properties": {...},         // optional
-  "user_id": "user_123",       // optional
-  "timestamp": 1234567890000   // optional, defaults to now
+  "project": "my-app",
+  "event": "page_view",
+  "properties": { "page": "/home", "browser": "chrome" },
+  "user_id": "user_123",
+  "timestamp": 1706745600000
 }
 ```
 
-### GET /stats
-Get aggregated statistics.
+- `project` (required) — Project identifier
+- `event` (required) — Event name
+- `properties` (optional) — Arbitrary JSON properties
+- `user_id` (optional) — User identifier
+- `timestamp` (optional) — Unix ms timestamp (defaults to now)
 
-| Param | Required | Description |
-|-------|----------|-------------|
-| project | yes | Project ID |
-| days | no | Days to look back (default: 7) |
+#### `POST /track/batch`
 
-Response:
+Track up to 100 events at once.
+
 ```json
 {
-  "project": "myproject",
-  "period": { "from": "2026-01-30", "to": "2026-02-06", "days": 7 },
-  "totals": { "unique_users": 258, "total_events": 1420 },
-  "daily": [
-    { "date": "2026-02-05", "unique_users": 32, "total_events": 180 }
-  ],
   "events": [
-    { "event": "page_view", "count": 1200, "unique_users": 245 }
+    { "project": "my-app", "event": "click", "user_id": "u1" },
+    { "project": "my-app", "event": "scroll", "user_id": "u2" }
   ]
 }
 ```
 
-### GET /events
-Get raw events (for debugging or detailed analysis).
+### Read Data (API key required)
 
-| Param | Required | Description |
-|-------|----------|-------------|
-| project | yes | Project ID |
-| event | no | Filter by event name |
-| days | no | Days to look back (default: 7) |
-| limit | no | Max events (default: 100, max: 1000) |
+Pass your key via `X-API-Key` header or `?key=` query parameter.
 
-### GET /tracker.js
-Client-side tracking script.
+#### `GET /stats`
 
-### GET /health
-Health check endpoint.
+Aggregated stats for a project.
 
----
-
-## Migrate from Mixpanel
-
-Replace:
-```html
-<!-- Old Mixpanel -->
-<script src="https://cdn.mxpnl.com/..."></script>
-<script>mixpanel.init('TOKEN');</script>
+```
+GET /stats?project=my-app&days=7&key=YOUR_KEY
 ```
 
-With:
-```html
-<!-- Agent Analytics -->
-<script src="https://agent-analytics.YOUR.workers.dev/tracker.js" 
-        data-project="clawflows"></script>
+Returns daily breakdown, event counts, and totals.
+
+#### `GET /events`
+
+Raw event log.
+
+```
+GET /events?project=my-app&event=page_view&days=7&limit=100&key=YOUR_KEY
 ```
 
-API mapping:
-- `mixpanel.track(event, props)` → `aa.track(event, props)`
-- `mixpanel.identify(id)` → `aa.identify(id)`
+#### `POST /query`
 
----
+Flexible analytics query with metrics, filters, and grouping.
 
-## Cost
+```json
+{
+  "project": "my-app",
+  "metrics": ["event_count", "unique_users"],
+  "group_by": ["event", "date"],
+  "filters": [
+    { "field": "event", "op": "eq", "value": "page_view" },
+    { "field": "properties.browser", "op": "eq", "value": "chrome" }
+  ],
+  "date_from": "2025-01-01",
+  "date_to": "2025-01-31",
+  "order_by": "event_count",
+  "order": "desc",
+  "limit": 50
+}
+```
 
-**Free tier covers:**
-- 100,000 requests/day
-- 5GB D1 storage
-- 5M rows read/day
+**Metrics:** `event_count`, `unique_users`  
+**Group by:** `event`, `date`, `user_id`  
+**Filter ops:** `eq`, `neq`, `gt`, `lt`, `gte`, `lte`  
+**Filter fields:** `event`, `user_id`, `date`, `properties.*`
 
-For most agent projects, this is unlimited free forever.
+#### `GET /properties`
 
----
+Discover event names and property keys for a project.
 
-## Roadmap (maybe)
+```
+GET /properties?project=my-app&days=30&key=YOUR_KEY
+```
 
-- [ ] Dashboard UI
-- [ ] API keys per project
-- [ ] Retention/funnel queries
-- [ ] Export to CSV
-- [ ] Webhooks on events
+### Utility
+
+#### `GET /health`
+
+Returns `{ "status": "ok", "service": "agent-analytics" }`.
+
+#### `GET /tracker.js`
+
+Client-side tracking script. Add to any web page:
+
+```html
+<script src="https://your-domain.com/tracker.js" data-project="my-app"></script>
+```
+
+Auto-tracks page views. Use `window.aa.track('event', { props })` for custom events.
+
+## License
+
+MIT

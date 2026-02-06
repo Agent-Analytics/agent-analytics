@@ -2,8 +2,10 @@
   "name": "agent-analytics",
   "version": "1.0.0",
   "description": "Simple analytics for AI agents - Cloudflare Workers + D1",
-  "main": "src/worker.js",
+  "type": "module",
+  "main": "src/platforms/cloudflare.js",
   "scripts": {
+    "start": "node src/platforms/node.js",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:create": "wrangler d1 create agent-analytics",
@@ -18,6 +20,9 @@
   ],
   "author": "Danny Shmueli",
   "license": "MIT",
+  "dependencies": {
+    "better-sqlite3": "^11.0.0"
+  },
   "devDependencies": {
     "wrangler": "^4.63.0"
   }
