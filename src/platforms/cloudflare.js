@@ -1,5 +1,8 @@
 /**
- * Cloudflare Worker entry point — multi-tenant
+ * Cloudflare Worker entry point
+ * 
+ * Wires up the D1 adapter and uses ctx.waitUntil() for
+ * non-blocking write operations (track, batch).
  */
 
 import { D1Adapter } from '../db/d1.js';
@@ -12,6 +15,7 @@ export default {
       projectTokens: env.PROJECT_TOKENS,
     });
 
+    // Fire-and-forget writes — response is already sent
     if (writeOps) {
       for (const op of writeOps) {
         ctx.waitUntil(op);
