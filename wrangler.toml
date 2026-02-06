@@ -3,6 +3,12 @@ main = "src/worker.js"
 compatibility_date = "2024-01-01"
 account_id = "139518248fb33aa103fcd01dda727d2b"
 
+# Custom domain
+routes = [
+  { pattern = "agentanalytics.sh", custom_domain = true },
+  { pattern = "www.agentanalytics.sh", custom_domain = true }
+]
+
 [[d1_databases]]
 binding = "DB"
 database_name = "agent-analytics"
