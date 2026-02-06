@@ -10,7 +10,7 @@
  * (e.g. ctx.waitUntil on Cloudflare).
  */
 
-import { validateApiKey } from './auth.js';
+import { validateApiKey, validateWriteAccess } from './auth.js';
 import { TRACKER_JS } from './tracker.js';
 
 const CORS_HEADERS = {
@@ -30,10 +30,11 @@ function json(data, status = 200) {
  * Route a request to the appropriate handler.
  * @param {Request} request
  * @param {import('./db/adapter.js').DbAdapter} db
- * @param {string} apiKeys - Comma-separated API keys from env
+ * @param {string} apiKeys - Comma-separated read API keys from env
+ * @param {{ writeKeys?: string, allowedOrigins?: string }} opts - Write auth config
  * @returns {Promise<{ response: Response, writeOps?: Promise[] }>}
  */
-export async function handleRequest(request, db, apiKeys) {
+export async function handleRequest(request, db, apiKeys, opts = {}) {
   const url = new URL(request.url);
   const path = url.pathname;
 
@@ -45,11 +46,19 @@ export async function handleRequest(request, db, apiKeys) {
   try {
     // POST /track
     if (path === '/track' && request.method === 'POST') {
+      const writeAuth = validateWriteAccess(request, url, opts);
+      if (!writeAuth.valid) {
+        return { response: json({ error: writeAuth.error || 'unauthorized' }, 403) };
+      }
       return await handleTrack(request, db);
     }
 
     // POST /track/batch
     if (path === '/track/batch' && request.method === 'POST') {
+      const writeAuth = validateWriteAccess(request, url, opts);
+      if (!writeAuth.valid) {
+        return { response: json({ error: writeAuth.error || 'unauthorized' }, 403) };
+      }
       return await handleTrackBatch(request, db);
     }
 

@@ -11,7 +11,10 @@ import { handleRequest } from '../handlers.js';
 export default {
   async fetch(request, env, ctx) {
     const db = new D1Adapter(env.DB);
-    const { response, writeOps } = await handleRequest(request, db, env.API_KEYS);
+    const { response, writeOps } = await handleRequest(request, db, env.API_KEYS, {
+      writeKeys: env.WRITE_KEYS,
+      allowedOrigins: env.ALLOWED_ORIGINS,
+    });
 
     // Fire-and-forget writes — response is already sent
     if (writeOps) {

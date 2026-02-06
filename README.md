@@ -82,6 +82,62 @@ curl -X POST https://api.agentanalytics.sh/query \
 
 To get an API key for the hosted version, [contact us](https://agentanalytics.sh) or self-host for full control.
 
+## Security
+
+Track endpoints (`/track`, `/track/batch`) are open by default for easy setup. For production, lock them down:
+
+### Write Keys (recommended)
+
+Require a secret key for all write operations — browser and server-side.
+
+```bash
+# Cloudflare
+npx wrangler secret put WRITE_KEYS
+# Enter: "wk_abc123,wk_def456"
+
+# Self-hosted
+WRITE_KEYS=wk_abc123,wk_def456 npm start
+```
+
+Clients pass the key via header or query param:
+```bash
+curl -X POST https://your-domain.com/track \
+  -H "X-Write-Key: wk_abc123" \
+  -H "Content-Type: application/json" \
+  -d '{"project":"myapp","event":"signup"}'
+```
+
+In the browser tracker:
+```html
+<script>
+  // After tracker.js loads
+  window.aa.writeKey = 'wk_abc123';
+</script>
+```
+
+### Origin Allowlist
+
+Restrict browser requests to specific domains. Server-side requests (no `Origin` header) need a write key.
+
+```bash
+# Cloudflare (already in wrangler.toml [vars])
+ALLOWED_ORIGINS = "https://myapp.com,https://staging.myapp.com"
+
+# Self-hosted
+ALLOWED_ORIGINS=https://myapp.com npm start
+```
+
+### Security Matrix
+
+| Config | Browser request | Server-side request |
+|--------|----------------|-------------------|
+| Nothing set | ✅ Open | ✅ Open |
+| `ALLOWED_ORIGINS` only | ✅ If origin matches | ✅ Open |
+| `WRITE_KEYS` only | ✅ If key valid | ✅ If key valid |
+| Both set | ✅ If origin matches OR key valid | ✅ If key valid |
+
+**Read endpoints** (`/stats`, `/events`, `/query`, `/properties`) always require an `API_KEYS` key.
+
 ## Architecture
 
 ```

@@ -15,6 +15,8 @@ import { handleRequest } from '../handlers.js';
 
 const PORT = parseInt(process.env.PORT || '8787');
 const API_KEYS = process.env.API_KEYS || '';
+const WRITE_KEYS = process.env.WRITE_KEYS || '';
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS || '';
 const DB_PATH = process.env.DB_PATH || 'analytics.db';
 
 const db = new SqliteAdapter(DB_PATH);
@@ -40,7 +42,10 @@ const server = createServer(async (req, res) => {
       body,
     });
 
-    const { response } = await handleRequest(request, db, API_KEYS);
+    const { response } = await handleRequest(request, db, API_KEYS, {
+      writeKeys: WRITE_KEYS,
+      allowedOrigins: ALLOWED_ORIGINS,
+    });
 
     // Convert Web API Response → Node ServerResponse
     res.writeHead(response.status, Object.fromEntries(response.headers.entries()));
