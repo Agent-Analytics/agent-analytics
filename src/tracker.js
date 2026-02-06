@@ -11,6 +11,7 @@ export const TRACKER_JS = `
     : '/track';
   
   const PROJECT = (document.currentScript && document.currentScript.dataset.project) || 'default';
+  const WRITE_KEY = (document.currentScript && document.currentScript.dataset.writeKey) || null;
   
   // Simple fingerprint for anonymous users
   function getAnonId() {
@@ -39,9 +40,17 @@ export const TRACKER_JS = `
         timestamp: Date.now()
       };
       
-      // Use sendBeacon for reliability, fallback to fetch
+      // Use fetch with write key header, fallback to sendBeacon
       const data = JSON.stringify(payload);
-      if (navigator.sendBeacon) {
+      const key = aa.writeKey || WRITE_KEY;
+      if (key) {
+        fetch(ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'X-Write-Key': key },
+          body: data,
+          keepalive: true
+        }).catch(() => {});
+      } else if (navigator.sendBeacon) {
         navigator.sendBeacon(ENDPOINT, data);
       } else {
         fetch(ENDPOINT, {

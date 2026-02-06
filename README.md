@@ -107,13 +107,18 @@ curl -X POST https://your-domain.com/track \
   -d '{"project":"myapp","event":"signup"}'
 ```
 
-In the browser tracker:
+In the browser tracker (two options):
 ```html
+<!-- Option 1: via data attribute -->
+<script src="https://your-domain.com/tracker.js" data-project="myapp" data-write-key="wk_abc123"></script>
+
+<!-- Option 2: set at runtime -->
 <script>
-  // After tracker.js loads
   window.aa.writeKey = 'wk_abc123';
 </script>
 ```
+
+> **Note:** Write keys in client-side code are visible to users (like Mixpanel project tokens). They prevent random spam but aren't true secrets. For sensitive projects, combine with `ALLOWED_ORIGINS` so only your domains can track.
 
 ### Origin Allowlist
 
