@@ -42,6 +42,46 @@ API_KEYS=my-secret-key npm start
 PORT=3000 DB_PATH=./data/analytics.db API_KEYS=key1,key2 npm start
 ```
 
+## Try It Now
+
+A live demo runs at `api.agentanalytics.sh`. Send a test event right from your terminal:
+
+```bash
+# 1. Track an event (no auth needed)
+curl -X POST https://api.agentanalytics.sh/track \
+  -H "Content-Type: application/json" \
+  -d '{
+    "project": "demo",
+    "event": "hello_world",
+    "properties": { "source": "readme" },
+    "user_id": "test_user_1"
+  }'
+# → {"ok": true}
+
+# 2. Track a batch
+curl -X POST https://api.agentanalytics.sh/track/batch \
+  -H "Content-Type: application/json" \
+  -d '{
+    "events": [
+      { "project": "demo", "event": "signup", "user_id": "u1", "properties": { "plan": "free" } },
+      { "project": "demo", "event": "signup", "user_id": "u2", "properties": { "plan": "pro" } }
+    ]
+  }'
+# → {"ok": true, "count": 2}
+
+# 3. Query your data (API key required for reads)
+curl -X POST https://api.agentanalytics.sh/query \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_KEY" \
+  -d '{
+    "project": "demo",
+    "metrics": ["event_count", "unique_users"],
+    "group_by": ["event"]
+  }'
+```
+
+To get an API key for the hosted version, [contact us](https://agentanalytics.sh) or self-host for full control.
+
 ## Architecture
 
 ```
