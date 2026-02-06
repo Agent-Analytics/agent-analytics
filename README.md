@@ -24,12 +24,22 @@ database_name = "agent-analytics"
 database_id = "abc123-your-id-here"
 ```
 
-**Update `wrangler.toml`** with your `database_id` (and optionally your `account_id`). The binding must stay as `DB`.
+**Update `wrangler.toml`:** replace `YOUR_DATABASE_ID` with your actual database ID.
+
+> ⚠️ **Important:** Keep the binding as `DB` — don't copy the binding name from the `d1 create` output (it generates a snake_case name like `agent_analytics`, but the code expects `DB`).
 
 ```bash
-# 3. Initialize the schema (note: --remote is required!)
+# 3. Initialize the schema
 npx wrangler d1 execute agent-analytics --remote --file=./schema.sql
+```
 
+> **Troubleshooting:** If step 3 fails with an authentication error, you may need to set your account ID:
+> ```bash
+> export CLOUDFLARE_ACCOUNT_ID=your-account-id  # find it in the Cloudflare dashboard
+> ```
+> Or add `account_id` to `wrangler.toml`. Alternatively, run the schema via the [Cloudflare dashboard](https://dash.cloudflare.com/) → D1 → your database → Console.
+
+```bash
 # 4. Set secrets
 echo "your-secret-read-key" | npx wrangler secret put API_KEYS
 echo "pt_your-project-token" | npx wrangler secret put PROJECT_TOKENS
