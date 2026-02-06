@@ -24,20 +24,24 @@ database_name = "agent-analytics"
 database_id = "abc123-your-id-here"
 ```
 
-**Update `wrangler.toml`:** replace `YOUR_DATABASE_ID` with your actual database ID.
+**Update `wrangler.toml`:**
+- Replace `YOUR_DATABASE_ID` with your actual database ID.
+- Optionally change `name` at the top if you want a custom Worker name (e.g., `my-analytics`). This determines your deploy URL.
 
 > ⚠️ **Important:** Keep the binding as `DB` — don't copy the binding name from the `d1 create` output (it generates a snake_case name like `agent_analytics`, but the code expects `DB`).
+
+> **Tip:** If you already have another `agent-analytics` Worker deployed, change `name` in `wrangler.toml` to avoid overwriting it.
 
 ```bash
 # 3. Initialize the schema
 npx wrangler d1 execute agent-analytics --remote --file=./schema.sql
 ```
 
-> **Troubleshooting:** If step 3 fails with an authentication error, you may need to set your account ID:
+> **Troubleshooting:** If any step fails with an authentication error, set your account ID (find it in the [Cloudflare dashboard](https://dash.cloudflare.com/) under **Workers & Pages → Overview**):
 > ```bash
-> export CLOUDFLARE_ACCOUNT_ID=your-account-id  # find it in the Cloudflare dashboard
+> export CLOUDFLARE_ACCOUNT_ID=your-account-id
 > ```
-> Or add `account_id` to `wrangler.toml`. Alternatively, run the schema via the [Cloudflare dashboard](https://dash.cloudflare.com/) → D1 → your database → Console.
+> Or uncomment and fill in `account_id` in `wrangler.toml`. You can also run the schema manually via the Cloudflare dashboard → D1 → your database → Console.
 
 ```bash
 # 4. Set secrets
@@ -57,9 +61,11 @@ By default, events write directly to D1 via `ctx.waitUntil()` — this is alread
 For very high-traffic sites, you can enable [Cloudflare Queues](https://developers.cloudflare.com/queues/) for automatic batching and retries. **Note:** Queues requires the Workers Paid plan ($5/month). The free plan works perfectly without it.
 
 ```bash
-# Create the queue
+# Create the queue (use a unique name per deployment)
 npx wrangler queues create agent-analytics-events
 ```
+
+> **Note:** Each queue can only have one consumer. If you're running multiple instances (e.g., prod + staging), use different queue names for each.
 
 Then uncomment the `[[queues.producers]]` and `[[queues.consumers]]` sections in `wrangler.toml` and redeploy:
 
