@@ -181,12 +181,7 @@ Two types of keys — same model as Mixpanel:
 
 #### `POST /track` — Single event
 
-```bash
-npx agent-analytics track my-site page_view --prop page=/home --prop browser=chrome
-```
-
-<details>
-<summary>curl equivalent</summary>
+Called automatically by `tracker.js` on your site. You don't need to call this manually.
 
 ```bash
 curl -X POST "https://app.agentanalytics.sh/track" \
@@ -199,7 +194,6 @@ curl -X POST "https://app.agentanalytics.sh/track" \
     "user_id": "user_123"
   }'
 ```
-</details>
 
 | Field | Required | Description |
 |-------|----------|-------------|
@@ -210,7 +204,7 @@ curl -X POST "https://app.agentanalytics.sh/track" \
 | `user_id` | | User identifier |
 | `timestamp` | | Unix ms (defaults to now) |
 
-#### `POST /track/batch` — Up to 100 events
+#### `POST /track/batch` — Up to 100 events at once
 
 ```bash
 curl -X POST "https://app.agentanalytics.sh/track/batch" \
