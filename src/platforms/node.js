@@ -10,8 +10,9 @@
  */
 
 import { createServer } from 'node:http';
+import { createAnalyticsHandler } from '@agent-analytics/core';
 import { SqliteAdapter } from '../db/sqlite.js';
-import { handleRequest } from '../handlers.js';
+import { validateApiKey, validateProjectToken } from '../auth.js';
 
 const PORT = parseInt(process.env.PORT || '8787');
 const API_KEYS = process.env.API_KEYS || '';
@@ -19,6 +20,12 @@ const PROJECT_TOKENS = process.env.PROJECT_TOKENS || '';
 const DB_PATH = process.env.DB_PATH || 'analytics.db';
 
 const db = new SqliteAdapter(DB_PATH);
+
+const handler = createAnalyticsHandler({
+  db,
+  validateWrite: (req, body) => validateProjectToken(body.token, PROJECT_TOKENS),
+  validateRead: (req, url) => validateApiKey(req, url, API_KEYS),
+});
 
 const server = createServer(async (req, res) => {
   try {
@@ -41,9 +48,12 @@ const server = createServer(async (req, res) => {
       body,
     });
 
-    const { response } = await handleRequest(request, db, API_KEYS, {
-      projectTokens: PROJECT_TOKENS,
-    });
+    const { response, writeOps } = await handler(request);
+
+    // Fire off background writes (best-effort in Node)
+    if (writeOps) {
+      for (const op of writeOps) op.catch(err => console.error('Write failed:', err));
+    }
 
     // Convert Web API Response → Node ServerResponse
     res.writeHead(response.status, Object.fromEntries(response.headers.entries()));

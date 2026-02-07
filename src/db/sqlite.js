@@ -9,7 +9,7 @@ import Database from 'better-sqlite3';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { today, daysAgo } from './adapter.js';
+import { today, daysAgo } from '@agent-analytics/core';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
