@@ -144,10 +144,16 @@ The whole point: your AI assistant queries the API instead of you logging into a
 # One-time setup
 npx agent-analytics login --token YOUR_API_KEY
 
+# Create a project and get your tracking token
+npx agent-analytics create my-site --domain https://mysite.com
+# → Project created! Token: pt_abc123...
+# Use this token in the JS snippet on your site.
+
 # Your agent runs this:
 npx agent-analytics stats my-site
 npx agent-analytics stats my-site --days 30
 npx agent-analytics events my-site
+npx agent-analytics projects              # List all projects
 ```
 
 Your agent turns that into: *"4,821 pageviews from 1,203 unique visitors this week, up 23% from last week. 127 signup clicks at 2.6% conversion."*
