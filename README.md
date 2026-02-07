@@ -17,10 +17,10 @@ npx agent-analytics login --token your_key --url https://your-worker.dev
 ### 2. Create a Project
 
 ```bash
-npx agent-analytics create my-site --domain https://mysite.com
+npx agent-analytics init my-site --domain https://mysite.com
 # → Project created!
 # → Token: pt_abc123...
-# → Use this token in the JS snippet on your site.
+# → Snippet + API example shown automatically
 ```
 
 ### 3. Add Tracking to Your Site
@@ -147,18 +147,26 @@ Everything you can do with the API, you can do with `npx agent-analytics`:
 ```bash
 # Auth
 npx agent-analytics login --token YOUR_KEY           # Save credentials
-npx agent-analytics login --token KEY --url URL       # Self-hosted login
+npx agent-analytics whoami                            # Show current account
 
 # Projects
-npx agent-analytics create my-site --domain https://mysite.com   # Create + get token
-npx agent-analytics projects                                      # List all projects
+npx agent-analytics init my-site --domain https://mysite.com    # Create + get snippet & token
+npx agent-analytics projects                                     # List all projects
+npx agent-analytics delete <project-id>                          # Delete a project
 
-# Query
+# Query (your agent runs these)
 npx agent-analytics stats my-site                    # Last 7 days overview
 npx agent-analytics stats my-site --days 30          # Custom period
 npx agent-analytics events my-site                   # Recent raw events
-npx agent-analytics events my-site --event signup    # Filter by event type
+npx agent-analytics events my-site --days 30 --limit 50   # With filters
+
+# Account
+npx agent-analytics revoke-key                       # Revoke + regenerate API key
 ```
+
+**Environment variables:**
+- `AGENT_ANALYTICS_KEY` — API key (overrides config file)
+- `AGENT_ANALYTICS_URL` — Custom API URL (for self-hosted instances)
 
 **npm:** <https://www.npmjs.com/package/agent-analytics>
 
