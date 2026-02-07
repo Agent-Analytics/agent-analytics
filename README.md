@@ -141,7 +141,26 @@ window.aa.page('Dashboard');
 The whole point: your AI assistant queries the API instead of you logging into a dashboard.
 
 ```bash
+# One-time setup
+npx agent-analytics login --token YOUR_API_KEY
+
 # Your agent runs this:
+npx agent-analytics stats my-site
+npx agent-analytics stats my-site --days 30
+npx agent-analytics events my-site
+```
+
+Your agent turns that into: *"4,821 pageviews from 1,203 unique visitors this week, up 23% from last week. 127 signup clicks at 2.6% conversion."*
+
+For self-hosted instances:
+```bash
+AGENT_ANALYTICS_URL=https://your-worker.dev npx agent-analytics stats my-site
+```
+
+<details>
+<summary>Or use curl directly</summary>
+
+```bash
 curl "https://your-analytics-url.com/stats?project=my-site&days=7" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
@@ -156,8 +175,7 @@ Response:
   ]
 }
 ```
-
-Your agent turns that into: *"4,821 pageviews from 1,203 unique visitors this week, up 23% from last week. 127 signup clicks at 2.6% conversion."*
+</details>
 
 ## Auth & Keys
 
