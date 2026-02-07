@@ -7,6 +7,12 @@
 
 import { today, daysAgo } from './adapter.js';
 
+export function validatePropertyKey(key) {
+  if (!key || key.length > 128 || !/^[a-zA-Z0-9_]+$/.test(key)) {
+    throw new Error('Invalid property filter key');
+  }
+}
+
 export class D1Adapter {
   constructor(db) {
     /** @type {import('@cloudflare/workers-types').D1Database} */
@@ -157,6 +163,7 @@ export class D1Adapter {
           params.push(f.value);
         } else if (f.field.startsWith('properties.')) {
           const propKey = f.field.replace('properties.', '');
+          validatePropertyKey(propKey);
           whereParts.push(`json_extract(properties, '$.${propKey}') ${sqlOp} ?`);
           params.push(f.value);
         }
