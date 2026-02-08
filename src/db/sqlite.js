@@ -9,7 +9,7 @@ import Database from 'better-sqlite3';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { today, daysAgo } from '@agent-analytics/core';
+import { today, daysAgo, parseSince, parseSinceMs } from '@agent-analytics/core';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -68,14 +68,39 @@ export class SqliteAdapter {
     insert(events);
   }
 
-  async getStats({ project, days = 7 }) {
-    const fromDate = daysAgo(days);
+  async getStats({ project, since, groupBy = 'day' }) {
+    const fromDate = parseSince(since);
+    const fromMs = parseSinceMs(since);
+    const VALID_GROUP = ['hour', 'day', 'week', 'month'];
+    if (!VALID_GROUP.includes(groupBy)) groupBy = 'day';
 
-    const daily = this.db.prepare(
-      `SELECT date, COUNT(DISTINCT user_id) as unique_users, COUNT(*) as total_events
-       FROM events WHERE project_id = ? AND date >= ?
-       GROUP BY date ORDER BY date`
-    ).all(project, fromDate);
+    let timeSeriesSql, timeSeriesParams;
+    if (groupBy === 'hour') {
+      timeSeriesSql = `SELECT strftime('%Y-%m-%dT%H:00', timestamp / 1000, 'unixepoch') as bucket,
+         COUNT(DISTINCT user_id) as unique_users, COUNT(*) as total_events
+         FROM events WHERE project_id = ? AND timestamp >= ?
+         GROUP BY bucket ORDER BY bucket`;
+      timeSeriesParams = [project, fromMs];
+    } else if (groupBy === 'week') {
+      timeSeriesSql = `SELECT date(date, 'weekday 0', '-6 days') as bucket,
+         COUNT(DISTINCT user_id) as unique_users, COUNT(*) as total_events
+         FROM events WHERE project_id = ? AND date >= ?
+         GROUP BY bucket ORDER BY bucket`;
+      timeSeriesParams = [project, fromDate];
+    } else if (groupBy === 'month') {
+      timeSeriesSql = `SELECT strftime('%Y-%m', date) as bucket,
+         COUNT(DISTINCT user_id) as unique_users, COUNT(*) as total_events
+         FROM events WHERE project_id = ? AND date >= ?
+         GROUP BY bucket ORDER BY bucket`;
+      timeSeriesParams = [project, fromDate];
+    } else {
+      timeSeriesSql = `SELECT date as bucket, COUNT(DISTINCT user_id) as unique_users, COUNT(*) as total_events
+         FROM events WHERE project_id = ? AND date >= ?
+         GROUP BY bucket ORDER BY bucket`;
+      timeSeriesParams = [project, fromDate];
+    }
+
+    const timeSeries = this.db.prepare(timeSeriesSql).all(...timeSeriesParams);
 
     const events = this.db.prepare(
       `SELECT event, COUNT(*) as count, COUNT(DISTINCT user_id) as unique_users
@@ -89,15 +114,15 @@ export class SqliteAdapter {
     ).get(project, fromDate);
 
     return {
-      period: { from: fromDate, to: today(), days },
+      period: { from: fromDate, to: today(), groupBy },
       totals,
-      daily,
+      timeSeries,
       events,
     };
   }
 
-  async getEvents({ project, event, days = 7, limit = 100 }) {
-    const fromDate = daysAgo(days);
+  async getEvents({ project, event, since, limit = 100 }) {
+    const fromDate = parseSince(since);
     const safeLimit = Math.min(limit, 1000);
 
     let query = `SELECT * FROM events WHERE project_id = ? AND date >= ?`;
@@ -137,7 +162,7 @@ export class SqliteAdapter {
     }
     if (selectParts.length === 0) selectParts.push('COUNT(*) as event_count');
 
-    const fromDate = date_from || daysAgo(7);
+    const fromDate = date_from || parseSince(null);
     const toDate = date_to || today();
     const whereParts = ['project_id = ?', 'date >= ?', 'date <= ?'];
     const params = [project, fromDate, toDate];
@@ -185,8 +210,15 @@ export class SqliteAdapter {
     };
   }
 
-  async getProperties({ project, days = 30 }) {
-    const fromDate = daysAgo(days);
+  async listProjects() {
+    return this.db.prepare(
+      `SELECT project_id as id, MIN(date) as created, MAX(date) as last_active, COUNT(*) as event_count
+       FROM events GROUP BY project_id ORDER BY last_active DESC`
+    ).all();
+  }
+
+  async getProperties({ project, since }) {
+    const fromDate = parseSince(since);
 
     const events = this.db.prepare(
       `SELECT event, COUNT(*) as count, COUNT(DISTINCT user_id) as unique_users,
