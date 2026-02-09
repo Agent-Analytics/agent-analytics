@@ -14,11 +14,6 @@ jobs:
         node-version: [20, 22]
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          repository: Agent-Analytics/agent-analytics-core
-          path: agent-analytics-core
-      - run: ln -s $GITHUB_WORKSPACE/agent-analytics-core ../agent-analytics-core
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
@@ -30,11 +25,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
-        with:
-          repository: Agent-Analytics/agent-analytics-core
-          path: agent-analytics-core
-      - run: ln -s $GITHUB_WORKSPACE/agent-analytics-core ../agent-analytics-core
       - uses: actions/setup-node@v4
         with:
           node-version: 22
