@@ -28,7 +28,7 @@ npx agent-analytics init my-site --domain https://mysite.com
 Drop one line before `</body>` — just like Google Analytics:
 
 ```html
-<script src="https://app.agentanalytics.sh/tracker.js" data-project="my-site" data-token="pt_abc123"></script>
+<script src="https://api.agentanalytics.sh/tracker.js" data-project="my-site" data-token="pt_abc123"></script>
 ```
 
 This auto-tracks page views with URL, referrer, and screen size. For custom events:
