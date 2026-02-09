@@ -104,12 +104,15 @@ npx wrangler d1 execute agent-analytics --remote --file=./schema.sql
 > ```
 
 ```bash
-# 4. Set secrets
-echo "your-secret-read-key" | npx wrangler secret put API_KEYS
-echo "pt_your-project-token" | npx wrangler secret put PROJECT_TOKENS
+# 4. Install dependencies
+npm install
 
 # 5. Deploy
 npx wrangler deploy
+
+# 6. Set secrets (after deploy — the Worker must exist first)
+echo "your-secret-read-key" | npx wrangler secret put API_KEYS
+echo "pt_your-project-token" | npx wrangler secret put PROJECT_TOKENS
 ```
 
 Your endpoint: `https://agent-analytics.YOUR-SUBDOMAIN.workers.dev`
