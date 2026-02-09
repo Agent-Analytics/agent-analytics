@@ -217,6 +217,8 @@ curl -X POST "https://app.agentanalytics.sh/track" \
 
 #### `POST /track/batch` — Up to 100 events at once
 
+Each event carries its own `project` field. Auth token is at the top level.
+
 ```bash
 curl -X POST "https://app.agentanalytics.sh/track/batch" \
   -H "Content-Type: application/json" \
@@ -228,6 +230,16 @@ curl -X POST "https://app.agentanalytics.sh/track/batch" \
     ]
   }'
 ```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `token` | ✅* | Project token (*optional if `PROJECT_TOKENS` not set) |
+| `events` | ✅ | Array of event objects (max 100) |
+| `events[].project` | ✅ | Project identifier (per event) |
+| `events[].event` | ✅ | Event name |
+| `events[].properties` | | Arbitrary JSON |
+| `events[].user_id` | | User identifier |
+| `events[].timestamp` | | Unix ms (defaults to now) |
 
 ### Querying Data
 
