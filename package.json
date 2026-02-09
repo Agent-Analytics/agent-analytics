@@ -6,6 +6,7 @@
   "main": "src/platforms/cloudflare.js",
   "scripts": {
     "start": "node src/platforms/node.js",
+    "test": "vitest run",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
     "db:create": "wrangler d1 create agent-analytics",
@@ -25,6 +26,7 @@
     "better-sqlite3": "^11.0.0"
   },
   "devDependencies": {
+    "vitest": "^2.1.0",
     "wrangler": "^4.63.0"
   }
 }

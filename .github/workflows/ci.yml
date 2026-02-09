@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20, 22]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      - run: npm ci
+      - run: npm test
+
+  smoke-test:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - name: Start server and run smoke tests
+        run: |
+          API_KEYS=smoke-key PROJECT_TOKENS=pt_smoke DB_PATH=:memory: node src/platforms/node.js &
+          sleep 2
+          curl -sf http://localhost:8787/health | grep -q '"ok"'
+          curl -sf -X POST http://localhost:8787/track \
+            -H 'Content-Type: application/json' \
+            -d '{"token":"pt_smoke","project":"smoke","event":"test_event"}' | grep -q '"ok"'
+          curl -sf 'http://localhost:8787/stats?project=smoke' \
+            -H 'X-API-Key: smoke-key' | grep -q '"totals"'
+          kill %1
