@@ -2,25 +2,30 @@
 name = "agent-analytics"
 main = "src/platforms/cloudflare.js"
 compatibility_date = "2024-01-01"
-account_id = "YOUR_ACCOUNT_ID"
+# account_id = "YOUR_ACCOUNT_ID"  # Uncomment and set, or use CLOUDFLARE_ACCOUNT_ID env var
 
-routes = [
-  { pattern = "api.agentanalytics.sh", custom_domain = true }
-]
+# Remove or change this for your own domain
+# routes = [
+#   { pattern = "yourdomain.com", custom_domain = true }
+# ]
 
 [[d1_databases]]
 binding = "DB"
 database_name = "agent-analytics"
 database_id = "YOUR_DATABASE_ID"
 
-[[queues.producers]]
-binding = "ANALYTICS_QUEUE"
-queue = "agent-analytics-events"
-
-[[queues.consumers]]
-queue = "agent-analytics-events"
-max_batch_size = 100
-max_batch_timeout = 5
+# Optional: Enable Queue for high-traffic sites (requires Workers Paid plan)
+# npx wrangler queues create agent-analytics-events
+# Then uncomment the following:
+#
+# [[queues.producers]]
+# binding = "ANALYTICS_QUEUE"
+# queue = "agent-analytics-events"
+#
+# [[queues.consumers]]
+# queue = "agent-analytics-events"
+# max_batch_size = 100
+# max_batch_timeout = 5
 
 [vars]
-ALLOWED_ORIGINS = "https://clawflows.com,http://localhost:3000"
+ALLOWED_ORIGINS = "*"
