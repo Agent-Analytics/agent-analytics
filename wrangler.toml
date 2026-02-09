@@ -28,4 +28,6 @@ database_id = "YOUR_DATABASE_ID"
 # max_batch_timeout = 5
 
 [vars]
-ALLOWED_ORIGINS = "*"
+# Comma-separated origins allowed for read endpoints (stats, events, query, properties).
+# Leave empty to allow all origins. Write endpoints (/track) always allow any origin.
+ALLOWED_ORIGINS = ""

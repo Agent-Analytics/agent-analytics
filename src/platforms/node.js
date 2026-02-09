@@ -18,6 +18,7 @@ const PORT = parseInt(process.env.PORT || '8787');
 const API_KEYS = process.env.API_KEYS || '';
 const PROJECT_TOKENS = process.env.PROJECT_TOKENS || '';
 const DB_PATH = process.env.DB_PATH || 'analytics.db';
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS || '';
 
 const db = new SqliteAdapter(DB_PATH);
 
@@ -25,6 +26,7 @@ const handleRequest = createAnalyticsHandler({
   db,
   validateWrite: makeValidateWrite(PROJECT_TOKENS),
   validateRead: makeValidateRead(API_KEYS),
+  allowedOrigins: ALLOWED_ORIGINS ? ALLOWED_ORIGINS.split(',').map(o => o.trim()) : undefined,
 });
 
 const server = createServer(async (req, res) => {
@@ -36,7 +38,17 @@ const server = createServer(async (req, res) => {
     let body = null;
     if (req.method === 'POST') {
       const chunks = [];
-      for await (const chunk of req) chunks.push(chunk);
+      let size = 0;
+      const MAX_BODY = 1024 * 1024; // 1MB
+      for await (const chunk of req) {
+        size += chunk.length;
+        if (size > MAX_BODY) {
+          res.writeHead(413, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'request body too large' }));
+          return;
+        }
+        chunks.push(chunk);
+      }
       body = Buffer.concat(chunks).toString();
     }
 

@@ -1,2 +1,9 @@
 node_modules/
 .wrangler/
+.env*
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.log
+.DS_Store
