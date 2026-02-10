@@ -195,7 +195,7 @@ Two types of keys — same model as Mixpanel:
 Called automatically by `tracker.js` on your site. You don't need to call this manually.
 
 ```bash
-curl -X POST "https://app.agentanalytics.sh/track" \
+curl -X POST "https://api.agentanalytics.sh/track" \
   -H "Content-Type: application/json" \
   -d '{
     "project": "my-site",
