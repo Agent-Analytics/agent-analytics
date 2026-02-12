@@ -168,7 +168,7 @@ npx agent-analytics revoke-key                       # Revoke + regenerate API k
 ```
 
 **Environment variables:**
-- `AGENT_ANALYTICS_KEY` — API key (overrides config file)
+- `AGENT_ANALYTICS_API_KEY` — API key (overrides config file)
 - `AGENT_ANALYTICS_URL` — Custom API URL (for self-hosted instances)
 
 **npm:** <https://www.npmjs.com/package/agent-analytics>
