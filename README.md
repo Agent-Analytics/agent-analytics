@@ -8,16 +8,16 @@ Web analytics your AI agent can read. Same idea as Google Analytics — add a JS
 
 ```bash
 # Hosted (at api.agentanalytics.sh)
-npx agent-analytics login --token aak_your_key
+npx @agent-analytics/cli login --token aak_your_key
 
 # Self-hosted — point to your instance
-npx agent-analytics login --token your_key --url https://your-worker.dev
+npx @agent-analytics/cli login --token your_key --url https://your-worker.dev
 ```
 
 ### 2. Create a Project
 
 ```bash
-npx agent-analytics create my-site --domain https://mysite.com
+npx @agent-analytics/cli create my-site --domain https://mysite.com
 # → Project created!
 # → Token: pt_abc123...
 # → Snippet + API example shown automatically
@@ -50,10 +50,10 @@ window.aa.page('Dashboard');
 Your agent reads the data instead of you opening a dashboard:
 
 ```bash
-npx agent-analytics stats my-site              # Last 7 days
-npx agent-analytics stats my-site --days 30    # Last 30 days
-npx agent-analytics events my-site             # Recent events
-npx agent-analytics projects                   # List all projects
+npx @agent-analytics/cli stats my-site              # Last 7 days
+npx @agent-analytics/cli stats my-site --days 30    # Last 30 days
+npx @agent-analytics/cli events my-site             # Recent events
+npx @agent-analytics/cli projects                   # List all projects
 ```
 
 Your agent turns that into: *"4,821 pageviews from 1,203 unique visitors this week, up 23% from last week. 127 signup clicks at 2.6% conversion."*
@@ -65,7 +65,7 @@ Your agent turns that into: *"4,821 pageviews from 1,203 unique visitors this we
 | | **Hosted** | **Self-Hosted** |
 |---|---|---|
 | **Setup** | Sign in at [app.agentanalytics.sh](https://app.agentanalytics.sh) | Deploy this repo to Cloudflare or Node.js |
-| **CLI** | `npx agent-analytics login --token aak_xxx` | `npx agent-analytics login --token your_key --url https://your-worker.dev` |
+| **CLI** | `npx @agent-analytics/cli login --token aak_xxx` | `npx @agent-analytics/cli login --token your_key --url https://your-worker.dev` |
 | **API URL** | `https://api.agentanalytics.sh` (default) | Your own Worker URL |
 | **API key** | Generated in dashboard | You choose it at deploy time (`API_KEYS` env var) |
 
@@ -145,33 +145,33 @@ API_KEYS=my-secret-key PROJECT_TOKENS=pt_my-token npm start
 
 ## CLI Reference
 
-Everything you can do with the API, you can do with `npx agent-analytics`:
+Everything you can do with the API, you can do with `npx @agent-analytics/cli`:
 
 ```bash
 # Auth
-npx agent-analytics login --token YOUR_KEY           # Save credentials
-npx agent-analytics whoami                            # Show current account
+npx @agent-analytics/cli login --token YOUR_KEY           # Save credentials
+npx @agent-analytics/cli whoami                            # Show current account
 
 # Projects
-npx agent-analytics create my-site --domain https://mysite.com   # Create + get snippet & token
-npx agent-analytics projects                                     # List all projects
-npx agent-analytics delete <project-id>                          # Delete a project
+npx @agent-analytics/cli create my-site --domain https://mysite.com   # Create + get snippet & token
+npx @agent-analytics/cli projects                                     # List all projects
+npx @agent-analytics/cli delete <project-id>                          # Delete a project
 
 # Query (your agent runs these)
-npx agent-analytics stats my-site                    # Last 7 days overview
-npx agent-analytics stats my-site --days 30          # Custom period
-npx agent-analytics events my-site                   # Recent raw events
-npx agent-analytics events my-site --days 30 --limit 50   # With filters
+npx @agent-analytics/cli stats my-site                    # Last 7 days overview
+npx @agent-analytics/cli stats my-site --days 30          # Custom period
+npx @agent-analytics/cli events my-site                   # Recent raw events
+npx @agent-analytics/cli events my-site --days 30 --limit 50   # With filters
 
 # Account
-npx agent-analytics revoke-key                       # Revoke + regenerate API key
+npx @agent-analytics/cli revoke-key                       # Revoke + regenerate API key
 ```
 
 **Environment variables:**
 - `AGENT_ANALYTICS_API_KEY` — API key (overrides config file)
 - `AGENT_ANALYTICS_URL` — Custom API URL (for self-hosted instances)
 
-**npm:** <https://www.npmjs.com/package/agent-analytics>
+**npm:** <https://www.npmjs.com/package/@agent-analytics/cli>
 
 ---
 
@@ -246,7 +246,7 @@ curl -X POST "https://api.agentanalytics.sh/track/batch" \
 #### `GET /stats` — Aggregated overview
 
 ```bash
-npx agent-analytics stats my-site --days 7
+npx @agent-analytics/cli stats my-site --days 7
 ```
 
 <details>
@@ -276,7 +276,7 @@ Returns daily breakdown (unique users + total events), top events by count, and 
 #### `GET /events` — Raw event log
 
 ```bash
-npx agent-analytics events my-site --event page_view --days 7 --limit 100
+npx @agent-analytics/cli events my-site --event page_view --days 7 --limit 100
 ```
 
 <details>
@@ -345,7 +345,7 @@ Returns event names with counts, first/last seen dates, and all known property k
 flowchart TB
     subgraph Clients
         website["Your Website<br/><small>tracker.js auto-tracks page views</small>"]
-        agent["AI Agent / CLI<br/><small>npx agent-analytics stats ...</small>"]
+        agent["AI Agent / CLI<br/><small>npx @agent-analytics/cli stats ...</small>"]
     end
 
     subgraph Server ["Server (this repo)"]
