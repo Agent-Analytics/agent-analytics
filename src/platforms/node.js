@@ -10,7 +10,7 @@
  */
 
 import { createServer } from 'node:http';
-import { createAnalyticsHandler } from '@agent-analytics/core';
+import { createAnalyticsHandler, MAX_BODY_BYTES } from '@agent-analytics/core';
 import { SqliteAdapter } from '../db/sqlite.js';
 import { makeValidateWrite, makeValidateRead } from '../auth.js';
 
@@ -39,10 +39,9 @@ const server = createServer(async (req, res) => {
     if (req.method === 'POST') {
       const chunks = [];
       let size = 0;
-      const MAX_BODY = 1024 * 1024; // 1MB
       for await (const chunk of req) {
         size += chunk.length;
-        if (size > MAX_BODY) {
+        if (size > MAX_BODY_BYTES) {
           res.writeHead(413, { 'Content-Type': 'application/json' });
           res.end(JSON.stringify({ error: 'request body too large' }));
           return;
