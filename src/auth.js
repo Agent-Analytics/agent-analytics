@@ -6,15 +6,18 @@
  * - validateRead(request, url) → { valid }
  */
 
-import { timingSafeEqual } from 'node:crypto';
-
 /** Constant-time string comparison to prevent timing attacks. */
 function safeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
+  const encoder = new TextEncoder();
+  const bufA = encoder.encode(a);
+  const bufB = encoder.encode(b);
   if (bufA.length !== bufB.length) return false;
-  return timingSafeEqual(bufA, bufB);
+  let result = 0;
+  for (let i = 0; i < bufA.length; i++) {
+    result |= bufA[i] ^ bufB[i];
+  }
+  return result === 0;
 }
 
 /** Check if value matches any item in a comma-separated list (constant-time per item). */
