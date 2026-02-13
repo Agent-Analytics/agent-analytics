@@ -7,7 +7,7 @@ Web analytics your AI agent can read. Same idea as Google Analytics — add a JS
 ### 1. Sign Up & Login
 
 ```bash
-# Hosted (at app.agentanalytics.sh)
+# Hosted (at api.agentanalytics.sh)
 npx agent-analytics login --token aak_your_key
 
 # Self-hosted — point to your instance
@@ -17,7 +17,7 @@ npx agent-analytics login --token your_key --url https://your-worker.dev
 ### 2. Create a Project
 
 ```bash
-npx agent-analytics init my-site --domain https://mysite.com
+npx agent-analytics create my-site --domain https://mysite.com
 # → Project created!
 # → Token: pt_abc123...
 # → Snippet + API example shown automatically
@@ -66,7 +66,7 @@ Your agent turns that into: *"4,821 pageviews from 1,203 unique visitors this we
 |---|---|---|
 | **Setup** | Sign in at [app.agentanalytics.sh](https://app.agentanalytics.sh) | Deploy this repo to Cloudflare or Node.js |
 | **CLI** | `npx agent-analytics login --token aak_xxx` | `npx agent-analytics login --token your_key --url https://your-worker.dev` |
-| **API URL** | `https://app.agentanalytics.sh` (default) | Your own Worker URL |
+| **API URL** | `https://api.agentanalytics.sh` (default) | Your own Worker URL |
 | **API key** | Generated in dashboard | You choose it at deploy time (`API_KEYS` env var) |
 
 ### Self-Hosted: Cloudflare Workers (recommended)
@@ -153,7 +153,7 @@ npx agent-analytics login --token YOUR_KEY           # Save credentials
 npx agent-analytics whoami                            # Show current account
 
 # Projects
-npx agent-analytics init my-site --domain https://mysite.com    # Create + get snippet & token
+npx agent-analytics create my-site --domain https://mysite.com   # Create + get snippet & token
 npx agent-analytics projects                                     # List all projects
 npx agent-analytics delete <project-id>                          # Delete a project
 
@@ -220,7 +220,7 @@ curl -X POST "https://api.agentanalytics.sh/track" \
 Each event carries its own `project` field. Auth token is at the top level.
 
 ```bash
-curl -X POST "https://app.agentanalytics.sh/track/batch" \
+curl -X POST "https://api.agentanalytics.sh/track/batch" \
   -H "Content-Type: application/json" \
   -d '{
     "token": "pt_your_token",
@@ -253,7 +253,7 @@ npx agent-analytics stats my-site --days 7
 <summary>curl equivalent</summary>
 
 ```bash
-curl "https://app.agentanalytics.sh/stats?project=my-site&days=7" \
+curl "https://api.agentanalytics.sh/stats?project=my-site&days=7" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 </details>
@@ -283,7 +283,7 @@ npx agent-analytics events my-site --event page_view --days 7 --limit 100
 <summary>curl equivalent</summary>
 
 ```bash
-curl "https://app.agentanalytics.sh/events?project=my-site&event=page_view&days=7&limit=100" \
+curl "https://api.agentanalytics.sh/events?project=my-site&event=page_view&days=7&limit=100" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 </details>
@@ -293,7 +293,7 @@ curl "https://app.agentanalytics.sh/events?project=my-site&event=page_view&days=
 The power endpoint. Supports metrics, grouping, filtering, and sorting.
 
 ```bash
-curl -X POST "https://app.agentanalytics.sh/query" \
+curl -X POST "https://api.agentanalytics.sh/query" \
   -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -324,7 +324,7 @@ curl -X POST "https://app.agentanalytics.sh/query" \
 #### `GET /properties` — Discover events & property keys
 
 ```bash
-curl "https://app.agentanalytics.sh/properties?project=my-site&days=30" \
+curl "https://api.agentanalytics.sh/properties?project=my-site&days=30" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
