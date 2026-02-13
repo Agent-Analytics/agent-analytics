@@ -341,21 +341,56 @@ Returns event names with counts, first/last seen dates, and all known property k
 
 ## Architecture
 
-```
-src/
-  handlers.js          — Pure request handling (Web API Request/Response)
-  auth.js              — Token + API key validation
-  tracker.js           — Embeddable client-side tracking script
-  db/
-    adapter.js         — Shared types and helpers
-    d1.js              — Cloudflare D1 adapter
-    sqlite.js          — better-sqlite3 adapter (self-host)
-  platforms/
-    cloudflare.js      — CF Worker entry (Queue + ctx.waitUntil)
-    node.js            — Node.js HTTP server entry
+```mermaid
+flowchart TB
+    subgraph Clients
+        website["Your Website<br/><small>tracker.js auto-tracks page views</small>"]
+        agent["AI Agent / CLI<br/><small>npx agent-analytics stats ...</small>"]
+    end
+
+    subgraph Server ["Server (this repo)"]
+        auth["auth.js<br/><small>Token + API key validation</small>"]
+        cf["platforms/cloudflare.js<br/><small>CF Worker + D1Adapter</small>"]
+        node["platforms/node.js<br/><small>Node.js HTTP + SQLite</small>"]
+    end
+
+    subgraph Core ["@agent-analytics/core"]
+        handler["createAnalyticsHandler()<br/><small>Platform-agnostic routing</small>"]
+        d1["D1Adapter<br/><small>Cloudflare D1 queries</small>"]
+        tracker["tracker.js<br/><small>Client-side tracking script</small>"]
+        helpers["Date helpers, property validation"]
+    end
+
+    website -- "POST /track" --> auth
+    agent -- "GET /stats · POST /query" --> auth
+    auth --> cf & node
+    cf --> handler
+    node --> handler
+    cf -.-> d1
+    node -.-> sqlite[("SQLite")]
+    handler --> d1 & tracker & helpers
 ```
 
-Handlers are platform-agnostic — they return data and let the platform decide how to write it. On Cloudflare, writes go through a Queue (if configured) or `ctx.waitUntil`. On Node.js, writes are inline. Add a new adapter to support any database or platform.
+`@agent-analytics/core` does the heavy lifting — it exports `createAnalyticsHandler({ db, validateWrite, validateRead })`, a platform-agnostic request handler. This repo plugs in the auth layer and platform glue: Cloudflare Workers with D1, or Node.js with SQLite. Add a new platform by providing a database adapter and calling the handler factory.
+
+```
+src/                              (this repo — platform glue + auth)
+  auth.js                         — Token + API key validation (constant-time compare)
+  db/
+    sqlite.js                     — better-sqlite3 adapter (self-host)
+  platforms/
+    cloudflare.js                 — CF Worker entry (D1Adapter + ctx.waitUntil)
+    node.js                       — Node.js HTTP server entry
+
+@agent-analytics/core             (npm dependency — does the heavy lifting)
+  src/
+    handler.js                    — Platform-agnostic request routing + response building
+    db/
+      adapter.js                  — Date helpers, shared query logic
+      d1.js                       — Cloudflare D1 adapter (D1Adapter, validatePropertyKey)
+    tracker.js                    — Client-side tracking script (served at GET /tracker.js)
+    ulid.js                       — ULID generation for event IDs
+```
 
 ## License
 
