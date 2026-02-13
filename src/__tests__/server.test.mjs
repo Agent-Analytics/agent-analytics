@@ -27,16 +27,18 @@ beforeAll(() => {
 
 // --- helpers ---
 
+const BROWSER_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+
 function postJSON(path, body) {
   return new Request(`http://localhost${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', 'User-Agent': BROWSER_UA },
     body: JSON.stringify(body),
   });
 }
 
 function get(path, headers = {}) {
-  return new Request(`http://localhost${path}`, { headers });
+  return new Request(`http://localhost${path}`, { headers: { 'User-Agent': BROWSER_UA, ...headers } });
 }
 
 // --- /health ---
