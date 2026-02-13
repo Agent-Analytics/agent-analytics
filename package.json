@@ -6,6 +6,7 @@
   "main": "src/platforms/cloudflare.js",
   "scripts": {
     "start": "node src/platforms/node.js",
+    "lint": "eslint .",
     "test": "vitest run",
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
@@ -26,6 +27,9 @@
     "better-sqlite3": "^11.0.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
+    "eslint": "^9.39.1",
+    "globals": "^16.5.0",
     "vitest": "^2.1.0",
     "wrangler": "^4.63.0"
   }

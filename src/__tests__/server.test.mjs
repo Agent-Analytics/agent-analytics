@@ -4,7 +4,7 @@
  * Uses SqliteAdapter with :memory: DB + createAnalyticsHandler from core.
  * Tests every endpoint the handler exposes.
  */
-import { describe, it, expect, beforeEach, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { createAnalyticsHandler } from '@agent-analytics/core';
 import { SqliteAdapter } from '../db/sqlite.js';
 import { makeValidateWrite, makeValidateRead } from '../auth.js';
@@ -37,10 +37,6 @@ function postJSON(path, body) {
 
 function get(path, headers = {}) {
   return new Request(`http://localhost${path}`, { headers });
-}
-
-async function json(result) {
-  return result.response.json();
 }
 
 // --- /health ---

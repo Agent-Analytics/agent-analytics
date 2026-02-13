@@ -348,7 +348,7 @@ export class SqliteAdapter {
       try {
         const props = JSON.parse(row.properties);
         Object.keys(props).forEach(k => propKeys.add(k));
-      } catch (e) { /* skip malformed JSON */ }
+      } catch { /* skip malformed JSON */ }
     }
 
     return {
