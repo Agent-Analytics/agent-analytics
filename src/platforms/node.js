@@ -14,7 +14,7 @@ import { createAnalyticsHandler, MAX_BODY_BYTES } from '@agent-analytics/core';
 import { SqliteAdapter } from '../db/sqlite.js';
 import { makeValidateWrite, makeValidateRead } from '../auth.js';
 
-const PORT = parseInt(process.env.PORT || '8787');
+const PORT = parseInt(process.env.PORT || '8787', 10);
 const API_KEYS = process.env.API_KEYS || '';
 const PROJECT_TOKENS = process.env.PROJECT_TOKENS || '';
 const DB_PATH = process.env.DB_PATH || 'analytics.db';
