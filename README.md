@@ -2,74 +2,15 @@
 
 Web analytics your AI agent can read. Same idea as Google Analytics — add a JS snippet to your site — but instead of dashboards, your agent queries the data via CLI or API.
 
-## Quick Start
+Pair it with [OpenClaw](https://openclaw.com) or any coding agent and it becomes a growth machine — your agent checks traffic, runs A/B tests, finds funnel drop-offs, and tells you what to fix. While you sleep.
 
-### 1. Sign Up & Login
+Self-host on Cloudflare Workers (free tier) or Node.js. Or use the [managed service](https://app.agentanalytics.sh) if you don't want to run infrastructure.
 
-```bash
-# Hosted (at api.agentanalytics.sh)
-npx @agent-analytics/cli login --token aak_your_key
+## Quick Start: Deploy
 
-# Self-hosted — point to your instance
-npx @agent-analytics/cli login --token your_key --url https://your-worker.dev
-```
+### Cloudflare Workers (recommended)
 
-### 2. Create a Project
-
-```bash
-npx @agent-analytics/cli create my-site --domain https://mysite.com
-# → Project created!
-# → Token: pt_abc123...
-# → Snippet + API example shown automatically
-```
-
-### 3. Add Tracking to Your Site
-
-Drop one line before `</body>` — just like Google Analytics:
-
-```html
-<script src="https://api.agentanalytics.sh/tracker.js" data-project="my-site" data-token="pt_abc123"></script>
-```
-
-This auto-tracks page views with URL, referrer, and screen size. For custom events:
-
-```javascript
-window.aa.track('signup_click', { plan: 'pro', page: '/pricing' });
-window.aa.identify('user_123');
-window.aa.page('Dashboard');
-```
-
-**Framework guides:**
-- **Plain HTML** — add before `</body>` of `index.html`
-- **React/Next.js** — add to `_document.tsx` or `layout.tsx` via `<Script>`
-- **Vue/Nuxt** — add to `nuxt.config.ts` `head.script` or `app.vue`
-- **Astro** — add to `Layout.astro` `<head>`
-
-### 4. Query Your Data
-
-Your agent reads the data instead of you opening a dashboard:
-
-```bash
-npx @agent-analytics/cli stats my-site              # Last 7 days
-npx @agent-analytics/cli stats my-site --days 30    # Last 30 days
-npx @agent-analytics/cli events my-site             # Recent events
-npx @agent-analytics/cli projects                   # List all projects
-```
-
-Your agent turns that into: *"4,821 pageviews from 1,203 unique visitors this week, up 23% from last week. 127 signup clicks at 2.6% conversion."*
-
----
-
-## Hosting Options
-
-| | **Hosted** | **Self-Hosted** |
-|---|---|---|
-| **Setup** | Sign in at [app.agentanalytics.sh](https://app.agentanalytics.sh) | Deploy this repo to Cloudflare or Node.js |
-| **CLI** | `npx @agent-analytics/cli login --token aak_xxx` | `npx @agent-analytics/cli login --token your_key --url https://your-worker.dev` |
-| **API URL** | `https://api.agentanalytics.sh` (default) | Your own Worker URL |
-| **API key** | Generated in dashboard | You choose it at deploy time (`API_KEYS` env var) |
-
-### Self-Hosted: Cloudflare Workers (recommended)
+Runs on the free tier. D1 database included.
 
 ```bash
 # 1. Clone
@@ -91,7 +32,7 @@ database_id = "abc123-your-id-here"
 - Replace `YOUR_DATABASE_ID` with your actual database ID.
 - Optionally change `name` at the top for a custom Worker name (determines your deploy URL).
 
-> ⚠️ **Important:** Keep the binding as `DB` — don't copy the binding name from the `d1 create` output (it generates `agent_analytics`, but the code expects `DB`).
+> Keep the binding as `DB` — don't copy the binding name from the `d1 create` output (it generates `agent_analytics`, but the code expects `DB`).
 
 ```bash
 # 3. Initialize the schema
@@ -131,7 +72,7 @@ Uncomment `[[queues.producers]]` and `[[queues.consumers]]` in `wrangler.toml`, 
 Events are batch-written (up to 100 per batch, flushed every 5s). Falls back to direct write if the queue fails.
 </details>
 
-### Self-Hosted: Node.js
+### Node.js
 
 ```bash
 git clone https://github.com/Agent-Analytics/agent-analytics.git
@@ -141,6 +82,53 @@ API_KEYS=my-secret-key PROJECT_TOKENS=pt_my-token npm start
 # Or: PORT=3000 DB_PATH=./data/analytics.db API_KEYS=key1,key2 npm start
 ```
 
+Uses SQLite via `better-sqlite3`. Database auto-created at `DB_PATH` (defaults to `./analytics.db`).
+
+---
+
+## Add Tracking to Your Site
+
+Drop one line before `</body>` — just like Google Analytics:
+
+```html
+<script src="https://your-server.com/tracker.js" data-project="my-site" data-token="pt_your-project-token"></script>
+```
+
+Replace `your-server.com` with your Worker URL or Node.js host.
+
+This auto-tracks page views with URL, referrer, and screen size. For custom events:
+
+```javascript
+window.aa.track('signup_click', { plan: 'pro', page: '/pricing' });
+window.aa.identify('user_123');
+window.aa.page('Dashboard');
+```
+
+**Framework guides:**
+- **Plain HTML** — add before `</body>` of `index.html`
+- **React/Next.js** — add to `_document.tsx` or `layout.tsx` via `<Script>`
+- **Vue/Nuxt** — add to `nuxt.config.ts` `head.script` or `app.vue`
+- **Astro** — add to `Layout.astro` `<head>`
+
+---
+
+## Query Your Data
+
+Your agent reads the data instead of you opening a dashboard:
+
+```bash
+# Point CLI at your instance
+npx @agent-analytics/cli login --token your-secret-read-key --url https://your-server.com
+
+# Query
+npx @agent-analytics/cli stats my-site              # Last 7 days
+npx @agent-analytics/cli stats my-site --days 30    # Last 30 days
+npx @agent-analytics/cli events my-site             # Recent events
+npx @agent-analytics/cli projects                   # List all projects
+```
+
+Your agent turns that into: *"4,821 pageviews from 1,203 unique visitors this week, up 23% from last week. 127 signup clicks at 2.6% conversion."*
+
 ---
 
 ## CLI Reference
@@ -149,7 +137,7 @@ Everything you can do with the API, you can do with `npx @agent-analytics/cli`:
 
 ```bash
 # Auth
-npx @agent-analytics/cli login --token YOUR_KEY           # Save credentials
+npx @agent-analytics/cli login --token YOUR_KEY --url https://your-server.com
 npx @agent-analytics/cli whoami                            # Show current account
 
 # Projects
@@ -195,7 +183,7 @@ Two types of keys — same model as Mixpanel:
 Called automatically by `tracker.js` on your site. You don't need to call this manually.
 
 ```bash
-curl -X POST "https://api.agentanalytics.sh/track" \
+curl -X POST "https://your-server.com/track" \
   -H "Content-Type: application/json" \
   -d '{
     "project": "my-site",
@@ -208,9 +196,9 @@ curl -X POST "https://api.agentanalytics.sh/track" \
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `project` | ✅ | Project identifier |
-| `token` | ✅* | Project token (*optional if `PROJECT_TOKENS` not set on server) |
-| `event` | ✅ | Event name |
+| `project` | Yes | Project identifier |
+| `token` | Yes* | Project token (*optional if `PROJECT_TOKENS` not set on server) |
+| `event` | Yes | Event name |
 | `properties` | | Arbitrary JSON |
 | `user_id` | | User identifier |
 | `timestamp` | | Unix ms (defaults to now) |
@@ -220,7 +208,7 @@ curl -X POST "https://api.agentanalytics.sh/track" \
 Each event carries its own `project` field. Auth token is at the top level.
 
 ```bash
-curl -X POST "https://api.agentanalytics.sh/track/batch" \
+curl -X POST "https://your-server.com/track/batch" \
   -H "Content-Type: application/json" \
   -d '{
     "token": "pt_your_token",
@@ -233,10 +221,10 @@ curl -X POST "https://api.agentanalytics.sh/track/batch" \
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `token` | ✅* | Project token (*optional if `PROJECT_TOKENS` not set) |
-| `events` | ✅ | Array of event objects (max 100) |
-| `events[].project` | ✅ | Project identifier (per event) |
-| `events[].event` | ✅ | Event name |
+| `token` | Yes* | Project token (*optional if `PROJECT_TOKENS` not set) |
+| `events` | Yes | Array of event objects (max 100) |
+| `events[].project` | Yes | Project identifier (per event) |
+| `events[].event` | Yes | Event name |
 | `events[].properties` | | Arbitrary JSON |
 | `events[].user_id` | | User identifier |
 | `events[].timestamp` | | Unix ms (defaults to now) |
@@ -253,7 +241,7 @@ npx @agent-analytics/cli stats my-site --days 7
 <summary>curl equivalent</summary>
 
 ```bash
-curl "https://api.agentanalytics.sh/stats?project=my-site&days=7" \
+curl "https://your-server.com/stats?project=my-site&days=7" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 </details>
@@ -283,7 +271,7 @@ npx @agent-analytics/cli events my-site --event page_view --days 7 --limit 100
 <summary>curl equivalent</summary>
 
 ```bash
-curl "https://api.agentanalytics.sh/events?project=my-site&event=page_view&days=7&limit=100" \
+curl "https://your-server.com/events?project=my-site&event=page_view&days=7&limit=100" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 </details>
@@ -293,7 +281,7 @@ curl "https://api.agentanalytics.sh/events?project=my-site&event=page_view&days=
 The power endpoint. Supports metrics, grouping, filtering, and sorting.
 
 ```bash
-curl -X POST "https://api.agentanalytics.sh/query" \
+curl -X POST "https://your-server.com/query" \
   -H "X-API-Key: YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{
@@ -324,7 +312,7 @@ curl -X POST "https://api.agentanalytics.sh/query" \
 #### `GET /properties` — Discover events & property keys
 
 ```bash
-curl "https://api.agentanalytics.sh/properties?project=my-site&days=30" \
+curl "https://your-server.com/properties?project=my-site&days=30" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
@@ -335,7 +323,7 @@ Returns event names with counts, first/last seen dates, and all known property k
 | Endpoint | Description |
 |----------|-------------|
 | `GET /health` | `{ "status": "ok", "service": "agent-analytics" }` |
-| `GET /tracker.js` | Client-side tracking script (see [Add Tracking](#3-add-tracking-to-your-site)) |
+| `GET /tracker.js` | Client-side tracking script (see [Add Tracking](#add-tracking-to-your-site)) |
 
 ---
 
@@ -391,6 +379,12 @@ src/                              (this repo — platform glue + auth)
     tracker.js                    — Client-side tracking script (served at GET /tracker.js)
     ulid.js                       — ULID generation for event IDs
 ```
+
+---
+
+## Managed Service
+
+Don't want to self-host? [Agent Analytics Cloud](https://app.agentanalytics.sh) gives you the same API with zero infrastructure — sign in, get your keys, start tracking.
 
 ## License
 
