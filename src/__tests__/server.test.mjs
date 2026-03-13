@@ -243,114 +243,25 @@ describe('GET /events', () => {
   });
 });
 
-describe('GET /sessions', () => {
-  it('returns sessions for project', async () => {
+describe('removed OSS analytics endpoints', () => {
+  it('returns 404 for /sessions', async () => {
     const { response } = await handler(get(`/sessions?project=${PROJECT}`, authHeaders));
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.project).toBe(PROJECT);
-    expect(Array.isArray(data.sessions)).toBe(true);
-    expect(data.sessions.length).toBeGreaterThan(0);
+    expect(response.status).toBe(404);
   });
 
-  it('rejects without API key', async () => {
-    const { response } = await handler(get(`/sessions?project=${PROJECT}`));
-    expect(response.status).toBe(401);
-  });
-
-  it('rejects without project param', async () => {
-    const { response } = await handler(get('/sessions', authHeaders));
-    expect(response.status).toBe(400);
-  });
-});
-
-describe('POST /query', () => {
-  it('returns query results', async () => {
-    const req = postJSON('/query', {
-      project: PROJECT,
-      metrics: ['event_count', 'unique_users'],
-      group_by: ['event'],
-    });
-    req.headers.set('X-API-Key', API_KEY);
-
-    const { response } = await handler(req);
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.project).toBe(PROJECT);
-    expect(data.rows).toBeDefined();
-    expect(data.rows.length).toBeGreaterThan(0);
-    expect(data.count).toBeGreaterThan(0);
-  });
-
-  it('supports filters', async () => {
+  it('returns 404 for /query', async () => {
     const req = postJSON('/query', {
       project: PROJECT,
       metrics: ['event_count'],
-      filters: [{ field: 'event', op: 'eq', value: 'page_view' }],
-    });
-    req.headers.set('X-API-Key', API_KEY);
-
-    const { response } = await handler(req);
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.rows).toBeDefined();
-  });
-
-  it('supports property filters', async () => {
-    const req = postJSON('/query', {
-      project: PROJECT,
-      metrics: ['event_count'],
-      filters: [{ field: 'properties.path', op: 'eq', value: '/home' }],
-    });
-    req.headers.set('X-API-Key', API_KEY);
-
-    const { response } = await handler(req);
-    expect(response.status).toBe(200);
-  });
-
-  it('rejects without API key', async () => {
-    const { response } = await handler(postJSON('/query', { project: PROJECT }));
-    expect(response.status).toBe(401);
-  });
-
-  it('rejects without project', async () => {
-    const req = postJSON('/query', { metrics: ['event_count'] });
-    req.headers.set('X-API-Key', API_KEY);
-    const { response } = await handler(req);
-    expect(response.status).toBe(400);
-  });
-
-  it('rejects invalid metric', async () => {
-    const req = postJSON('/query', {
-      project: PROJECT,
-      metrics: ['bogus'],
     });
     req.headers.set('X-API-Key', API_KEY);
     const { response } = await handler(req);
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(404);
   });
-});
 
-describe('GET /properties', () => {
-  it('returns event names and property keys', async () => {
+  it('returns 404 for /properties', async () => {
     const { response } = await handler(get(`/properties?project=${PROJECT}`, authHeaders));
-    expect(response.status).toBe(200);
-    const data = await response.json();
-    expect(data.project).toBe(PROJECT);
-    expect(Array.isArray(data.events)).toBe(true);
-    expect(data.events.length).toBeGreaterThan(0);
-    expect(Array.isArray(data.property_keys)).toBe(true);
-    expect(data.property_keys).toContain('path');
-  });
-
-  it('rejects without API key', async () => {
-    const { response } = await handler(get(`/properties?project=${PROJECT}`));
-    expect(response.status).toBe(401);
-  });
-
-  it('rejects without project param', async () => {
-    const { response } = await handler(get('/properties', authHeaders));
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(404);
   });
 });
 

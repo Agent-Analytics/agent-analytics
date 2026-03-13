@@ -24,7 +24,7 @@ export function makeValidateWrite(projectTokensStr) {
 }
 
 /**
- * Create a read validator for query endpoints (/stats, /events, /query, /properties).
+ * Create a read validator for OSS read endpoints (/projects, /stats, /events).
  * API key via X-API-Key header or ?key= query param.
  */
 export function makeValidateRead(apiKeysStr) {

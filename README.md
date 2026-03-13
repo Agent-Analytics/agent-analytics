@@ -2,7 +2,7 @@
 
 Web analytics your AI agent can read. Same idea as Google Analytics — add a JS snippet to your site — but instead of dashboards, your agent queries the data via CLI or API.
 
-Pair it with [OpenClaw](https://openclaw.com) or any coding agent and it becomes a growth machine — your agent checks traffic, runs A/B tests, finds funnel drop-offs, and tells you what to fix. While you sleep.
+Pair it with [OpenClaw](https://openclaw.ai) or any coding agent and it becomes a growth machine — your agent checks traffic, runs A/B tests, finds funnel drop-offs, and tells you what to fix. While you sleep.
 
 Self-host on Cloudflare Workers (free tier) or Node.js. Or use the [managed service](https://app.agentanalytics.sh) if you don't want to run infrastructure.
 
@@ -112,7 +112,7 @@ window.aa.page('Dashboard');
 
 ---
 
-## Query Your Data
+## Read Your Data
 
 Your agent reads the data instead of you opening a dashboard:
 
@@ -120,7 +120,7 @@ Your agent reads the data instead of you opening a dashboard:
 # Point CLI at your instance
 npx @agent-analytics/cli login --token your-secret-read-key --url https://your-server.com
 
-# Query
+# Read
 npx @agent-analytics/cli stats my-site              # Last 7 days
 npx @agent-analytics/cli stats my-site --days 30    # Last 30 days
 npx @agent-analytics/cli events my-site             # Recent events
@@ -174,7 +174,7 @@ Two types of keys — same model as Mixpanel:
 | Key | Purpose | Visibility | Used by |
 |-----|---------|------------|---------|
 | **Project Token** (`pt_...`) | Identifies which project events belong to | Public (embedded in JS snippet) | `tracker.js`, `/track` |
-| **API Key** | Read access to query stats | **Private** (keep secret) | CLI, `/stats`, `/events`, `/query` |
+| **API Key** | Read access to project lists, stats, and recent events | **Private** (keep secret) | CLI, `/projects`, `/stats`, `/events` |
 
 ### Tracking Events
 
@@ -229,7 +229,7 @@ curl -X POST "https://your-server.com/track/batch" \
 | `events[].user_id` | | User identifier |
 | `events[].timestamp` | | Unix ms (defaults to now) |
 
-### Querying Data
+### Reading Data
 
 #### `GET /stats` — Aggregated overview
 
@@ -276,47 +276,14 @@ curl "https://your-server.com/events?project=my-site&event=page_view&days=7&limi
 ```
 </details>
 
-#### `POST /query` — Flexible analytics query
-
-The power endpoint. Supports metrics, grouping, filtering, and sorting.
+#### `GET /projects` — List projects
 
 ```bash
-curl -X POST "https://your-server.com/query" \
-  -H "X-API-Key: YOUR_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "project": "my-site",
-    "metrics": ["event_count", "unique_users"],
-    "group_by": ["event", "date"],
-    "filters": [
-      { "field": "event", "op": "eq", "value": "page_view" },
-      { "field": "properties.browser", "op": "eq", "value": "chrome" }
-    ],
-    "date_from": "2026-01-01",
-    "date_to": "2026-01-31",
-    "order_by": "event_count",
-    "order": "desc",
-    "limit": 50
-  }'
-```
-
-| Parameter | Description |
-|-----------|-------------|
-| `metrics` | `event_count`, `unique_users` |
-| `group_by` | `event`, `date`, `user_id` |
-| `filters[].op` | `eq`, `neq`, `gt`, `lt`, `gte`, `lte` |
-| `filters[].field` | `event`, `user_id`, `date`, or `properties.*` for JSON property filters |
-| `order_by` | Any metric or group_by field |
-| `limit` | Max 1000 rows (default: 100) |
-
-#### `GET /properties` — Discover events & property keys
-
-```bash
-curl "https://your-server.com/properties?project=my-site&days=30" \
+curl "https://your-server.com/projects" \
   -H "X-API-Key: YOUR_API_KEY"
 ```
 
-Returns event names with counts, first/last seen dates, and all known property keys. Useful for building dynamic queries.
+Returns the projects already present in your self-hosted instance so your agent can pick the right site before reading stats or recent events.
 
 ### Utility
 
@@ -350,7 +317,7 @@ flowchart TB
     end
 
     website -- "POST /track" --> auth
-    agent -- "GET /stats · POST /query" --> auth
+    agent -- "GET /projects · GET /stats · GET /events" --> auth
     auth --> cf & node
     cf --> handler
     node --> handler
@@ -374,7 +341,7 @@ src/                              (this repo — platform glue + auth)
   src/
     handler.js                    — Platform-agnostic request routing + response building
     db/
-      adapter.js                  — Date helpers, shared query logic
+      adapter.js                  — Date helpers and adapter contracts
       d1.js                       — Cloudflare D1 adapter (D1Adapter, validatePropertyKey)
     tracker.js                    — Client-side tracking script (served at GET /tracker.js)
     ulid.js                       — ULID generation for event IDs
