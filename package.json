@@ -1,7 +1,7 @@
 {
   "name": "agent-analytics",
   "version": "1.0.0",
-  "description": "Simple analytics for AI agents - Cloudflare Workers + D1",
+  "description": "Agent-first web analytics for AI agents - Cloudflare Workers + D1",
   "type": "module",
   "main": "src/platforms/cloudflare.js",
   "scripts": {
