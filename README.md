@@ -6,7 +6,13 @@ Works with Claude Code, Codex, Cursor, OpenClaw, or any agent that can run comma
 
 Self-host this repo on Cloudflare Workers or Node.js. If you do not want to run infrastructure, use [Agent Analytics Cloud](https://app.agentanalytics.sh).
 
-[Docs](https://docs.agentanalytics.sh) - [Tracker.js Guide](https://docs.agentanalytics.sh/reference/tracker-js/) - [API Reference](https://docs.agentanalytics.sh/api/) - [OpenAPI](https://docs.agentanalytics.sh/openapi.yaml) - [Managed Cloud](https://app.agentanalytics.sh)
+<p>
+  <a href="https://docs.agentanalytics.sh/openapi.yaml"><img src="https://img.shields.io/badge/OpenAPI-3.1-6BA539?style=flat-square" alt="OpenAPI 3.1" /></a>
+  <a href="https://github.com/Agent-Analytics/agent-analytics/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-MIT-4A4A4A?style=flat-square" alt="MIT License" /></a>
+  <img src="https://img.shields.io/badge/Deployment-Self--hosted-E49C48?style=flat-square" alt="Self-hosted" />
+</p>
+
+[Docs](https://docs.agentanalytics.sh) - [API](https://docs.agentanalytics.sh/api/)
 
 ## Why Agent Analytics
 
