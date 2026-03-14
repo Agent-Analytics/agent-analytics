@@ -243,25 +243,25 @@ describe('GET /events', () => {
   });
 });
 
-describe('removed OSS analytics endpoints', () => {
+describe('OSS analytics endpoints', () => {
   it('returns 404 for /sessions', async () => {
     const { response } = await handler(get(`/sessions?project=${PROJECT}`, authHeaders));
     expect(response.status).toBe(404);
   });
 
-  it('returns 404 for /query', async () => {
+  it('returns 200 for /query', async () => {
     const req = postJSON('/query', {
       project: PROJECT,
       metrics: ['event_count'],
     });
     req.headers.set('X-API-Key', API_KEY);
     const { response } = await handler(req);
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(200);
   });
 
-  it('returns 404 for /properties', async () => {
+  it('returns 200 for /properties', async () => {
     const { response } = await handler(get(`/properties?project=${PROJECT}`, authHeaders));
-    expect(response.status).toBe(404);
+    expect(response.status).toBe(200);
   });
 });
 

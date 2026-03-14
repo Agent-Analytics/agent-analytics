@@ -6,7 +6,7 @@
  * - validateRead(request, url) → { valid }
  */
 
-import { safeEqual, includesSafe } from '@agent-analytics/core';
+import { includesSafe } from '@agent-analytics/core';
 
 /**
  * Create a write validator for ingestion endpoints (/track, /track/batch).
