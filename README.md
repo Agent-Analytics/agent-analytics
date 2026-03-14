@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset=".github/assets/agent-analytics-logo-dark.png" />
+    <source media="(prefers-color-scheme: light)" srcset=".github/assets/agent-analytics-logo-light.png" />
+    <img src=".github/assets/agent-analytics-logo-light.png" alt="Agent Analytics" width="420" />
+  </picture>
+</p>
+
 # Agent Analytics
 
 Web analytics your AI agent can read. Add one script tag, store events in your own Cloudflare D1 database or SQLite file, and query the results from CLI or HTTP instead of living in a dashboard.
