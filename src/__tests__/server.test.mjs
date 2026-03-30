@@ -573,8 +573,44 @@ describe('OSS analytics endpoints', () => {
   });
 
   it('returns session-backed metrics for /query', async () => {
+    const project = `session-metrics-${Date.now()}`;
+    const now = Date.now();
+
+    const firstPageView = await handler(postJSON('/track', {
+      token: TOKEN,
+      project,
+      event: 'page_view',
+      properties: { path: '/' },
+      user_id: 'query-user-1',
+      session_id: 'query-session-1',
+      timestamp: now,
+    }));
+    if (firstPageView.writeOps) await Promise.all(firstPageView.writeOps);
+
+    const signup = await handler(postJSON('/track', {
+      token: TOKEN,
+      project,
+      event: 'signup',
+      properties: { path: '/signup' },
+      user_id: 'query-user-1',
+      session_id: 'query-session-1',
+      timestamp: now + 1000,
+    }));
+    if (signup.writeOps) await Promise.all(signup.writeOps);
+
+    const secondPageView = await handler(postJSON('/track', {
+      token: TOKEN,
+      project,
+      event: 'page_view',
+      properties: { path: '/' },
+      user_id: 'query-user-2',
+      session_id: 'query-session-2',
+      timestamp: now,
+    }));
+    if (secondPageView.writeOps) await Promise.all(secondPageView.writeOps);
+
     const req = postJSON('/query', {
-      project: PROJECT,
+      project,
       metrics: ['event_count', 'session_count', 'bounce_rate', 'avg_duration'],
       group_by: ['event'],
       order_by: 'event',
@@ -586,9 +622,9 @@ describe('OSS analytics endpoints', () => {
     const data = await response.json();
     const pageViewRow = data.rows.find(row => row.event === 'page_view');
     expect(pageViewRow).toBeDefined();
-    expect(pageViewRow.session_count).toBeGreaterThan(0);
-    expect(typeof pageViewRow.bounce_rate).toBe('number');
-    expect(typeof pageViewRow.avg_duration).toBe('number');
+    expect(pageViewRow.session_count).toBe(2);
+    expect(pageViewRow.bounce_rate).toBe(0.5);
+    expect(pageViewRow.avg_duration).toBe(500);
   });
 
   it('returns 200 for /properties', async () => {
@@ -626,7 +662,7 @@ describe('GET /projects', () => {
     const data = await response.json();
     expect(Array.isArray(data.projects)).toBe(true);
     expect(data.projects.length).toBeGreaterThan(0);
-    expect(data.projects[0].id).toBe(PROJECT);
+    expect(data.projects.some(project => project.id === PROJECT)).toBe(true);
   });
 
   it('rejects without API key', async () => {

@@ -5,6 +5,7 @@ import {
   buildIdentifyStatements,
   buildSessionUpsertStatement,
 } from './identity-aware.js';
+import { queryWithSessionMetrics } from './query.js';
 
 const schemaCompatibility = new WeakMap();
 
@@ -94,5 +95,9 @@ export class D1Adapter extends CoreD1Adapter {
 
   async identifyUser(identityData) {
     return this._batch(buildIdentifyStatements(identityData));
+  }
+
+  async query(args) {
+    return queryWithSessionMetrics(this, args);
   }
 }

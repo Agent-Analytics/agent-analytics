@@ -16,6 +16,7 @@ import {
   buildIdentifyStatements,
   buildSessionUpsertStatement,
 } from './identity-aware.js';
+import { queryWithSessionMetrics } from './query.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -115,5 +116,9 @@ export class SqliteAdapter extends BaseAdapter {
 
   async identifyUser(identityData) {
     return this._batch(buildIdentifyStatements(identityData));
+  }
+
+  async query(args) {
+    return queryWithSessionMetrics(this, args);
   }
 }
