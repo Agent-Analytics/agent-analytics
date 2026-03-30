@@ -7,11 +7,13 @@
  * For the multi-tenant hosted product, see hosted/entry.js.
  */
 
-import { createAnalyticsHandler, D1Adapter } from '@agent-analytics/core';
+import { createAnalyticsHandler } from '@agent-analytics/core';
 import { makeValidateWrite, makeValidateRead } from '../auth.js';
+import { D1Adapter, ensureD1Compatibility } from '../db/d1.js';
 
 export default {
   async fetch(request, env, ctx) {
+    await ensureD1Compatibility(env.DB);
     const db = new D1Adapter(env.DB);
     const validateWrite = makeValidateWrite(env.PROJECT_TOKENS);
     const validateRead = makeValidateRead(env.API_KEYS);

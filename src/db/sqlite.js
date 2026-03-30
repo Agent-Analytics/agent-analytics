@@ -10,6 +10,12 @@ import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { BaseAdapter } from '@agent-analytics/core/base-adapter';
+import { ulid } from '@agent-analytics/core/ulid';
+import {
+  buildEventInsertStatement,
+  buildIdentifyStatements,
+  buildSessionUpsertStatement,
+} from './identity-aware.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -25,6 +31,14 @@ export class SqliteAdapter extends BaseAdapter {
     const schemaPath = resolve(__dirname, '../../schema.sql');
     const schema = readFileSync(schemaPath, 'utf-8');
     this.db.exec(schema);
+    this._migrateLegacySchema();
+  }
+
+  _migrateLegacySchema() {
+    const eventColumns = this.db.prepare('PRAGMA table_info(events)').all();
+    if (eventColumns.length > 0 && !eventColumns.some(column => column.name === 'country')) {
+      this.db.exec('ALTER TABLE events ADD COLUMN country TEXT');
+    }
   }
 
   _run(sql, params) {
@@ -46,5 +60,60 @@ export class SqliteAdapter extends BaseAdapter {
       }
     });
     txn(statements);
+  }
+
+  _sessionUpsertSqlAndParams(project, eventData) {
+    return buildSessionUpsertStatement({
+      project,
+      session_id: eventData.session_id,
+      user_id: eventData.user_id,
+      timestamp: eventData.timestamp,
+      properties: eventData.properties,
+      count: eventData._count || 1,
+    });
+  }
+
+  async trackEvent(eventData) {
+    const eventStatement = buildEventInsertStatement({
+      id: ulid(),
+      ...eventData,
+    });
+
+    if (!eventData.session_id) {
+      return this._run(eventStatement.sql, eventStatement.params);
+    }
+
+    const sessionStatement = this._sessionUpsertSqlAndParams(eventData.project, eventData);
+    return this._batch([eventStatement, sessionStatement]);
+  }
+
+  async trackBatch(events) {
+    const statements = [];
+
+    for (const event of events) {
+      statements.push(buildEventInsertStatement({
+        id: ulid(),
+        ...event,
+      }));
+    }
+
+    for (const event of events) {
+      if (!event.session_id) continue;
+      statements.push(this._sessionUpsertSqlAndParams(event.project, event));
+    }
+
+    return this._batch(statements);
+  }
+
+  async upsertSession(sessionData) {
+    const statement = this._sessionUpsertSqlAndParams(
+      sessionData.project_id || sessionData.project,
+      sessionData,
+    );
+    return this._run(statement.sql, statement.params);
+  }
+
+  async identifyUser(identityData) {
+    return this._batch(buildIdentifyStatements(identityData));
   }
 }

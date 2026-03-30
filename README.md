@@ -197,6 +197,54 @@ curl "$AGENT_ANALYTICS_URL/events?project=marketing-site&event=signup_click&sinc
 
 The hosted `login` flow in the CLI is for Agent Analytics Cloud. For this self-hosted OSS server, the simplest path is `AGENT_ANALYTICS_URL` plus `AGENT_ANALYTICS_API_KEY`.
 
+## Trustworthy Growth Queries
+
+`POST /query` is the main agent-facing read surface for custom growth analysis. It supports both event metrics and session-backed metrics on the same filtered event set:
+
+- `event_count`
+- `unique_users`
+- `session_count`
+- `bounce_rate`
+- `avg_duration`
+
+That means an agent can stay on the existing OSS contract and still segment noisy traffic out of product reporting before drawing conclusions.
+
+Segment product traffic away from marketing/docs/internal reads:
+
+```bash
+curl "$AGENT_ANALYTICS_URL/query" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $AGENT_ANALYTICS_API_KEY" \
+  -d '{
+    "project": "agentanalytics-landing",
+    "metrics": ["event_count", "session_count", "bounce_rate", "avg_duration"],
+    "group_by": ["event"],
+    "filters": [
+      { "field": "properties.hostname", "op": "eq", "value": "app.agentanalytics.sh" },
+      { "field": "event", "op": "neq", "value": "api_read" }
+    ],
+    "order_by": "event_count",
+    "order": "desc",
+    "limit": 20
+  }'
+```
+
+Check activation events without trusting blended totals:
+
+```bash
+curl "$AGENT_ANALYTICS_URL/query" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $AGENT_ANALYTICS_API_KEY" \
+  -d '{
+    "project": "agentanalytics-landing",
+    "metrics": ["event_count", "unique_users", "session_count"],
+    "group_by": ["event"],
+    "filters": [
+      { "field": "event", "op": "contains", "value": "project" }
+    ]
+  }'
+```
+
 ## What Gets Tracked and Stored
 
 - Default `page_view` events include full URL, pathname, hostname, referrer, title, screen resolution, language, browser, browser version, OS, device type, timezone, UTM parameters, session count, and first-touch attribution.
@@ -237,8 +285,10 @@ The self-hosted server in this repo exposes these routes:
 - `GET /projects`
 - `GET /stats?project=...`
 - `GET /events?project=...`
+- `POST /query`
+- `GET /properties?project=...`
 
-Read endpoints require `X-API-Key`. Write endpoints use the public project token in the JSON body. The public docs and OpenAPI spec cover the broader Agent Analytics platform too, so treat the list above as the source of truth for the OSS server in this repo.
+Read endpoints require `X-API-Key`. Write endpoints use the public project token in the JSON body. Richer read endpoints such as sessions, breakdowns, pages, and heatmaps are intentionally not exposed by this OSS server even though the shared core package still contains those internal adapter methods. The public docs and OpenAPI spec cover the broader Agent Analytics platform too, so treat the list above as the source of truth for the OSS server in this repo.
 
 ## Contributing
 
