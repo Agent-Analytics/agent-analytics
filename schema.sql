@@ -8,7 +8,8 @@ CREATE TABLE IF NOT EXISTS events (
   user_id TEXT,
   session_id TEXT,
   timestamp INTEGER NOT NULL,
-  date TEXT NOT NULL
+  date TEXT NOT NULL,
+  country TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_project_date ON events(project_id, date);
@@ -30,3 +31,13 @@ CREATE TABLE IF NOT EXISTS sessions (
 
 CREATE INDEX IF NOT EXISTS idx_sessions_project_date ON sessions(project_id, date);
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(project_id, user_id);
+
+CREATE TABLE IF NOT EXISTS identity_map (
+  previous_id TEXT NOT NULL,
+  canonical_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (previous_id, project_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_identity_canonical ON identity_map(canonical_id, project_id);

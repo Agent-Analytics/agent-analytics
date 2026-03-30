@@ -4,10 +4,12 @@
  * Uses SqliteAdapter with :memory: DB + createAnalyticsHandler from core.
  * Tests every endpoint the handler exposes.
  */
+import Database from 'better-sqlite3';
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createAnalyticsHandler } from '@agent-analytics/core';
 import { SqliteAdapter } from '../db/sqlite.js';
 import { makeValidateWrite, makeValidateRead } from '../auth.js';
+import cloudflareWorker from '../platforms/cloudflare.js';
 
 const PROJECT = 'test-project';
 const TOKEN = 'pt_test';
@@ -39,6 +41,49 @@ function postJSON(path, body) {
 
 function get(path, headers = {}) {
   return new Request(`http://localhost${path}`, { headers: { 'User-Agent': BROWSER_UA, ...headers } });
+}
+
+class FakeD1Statement {
+  constructor(db, sql, params = []) {
+    this.db = db;
+    this.sql = sql;
+    this.params = params;
+  }
+
+  bind(...params) {
+    return new FakeD1Statement(this.db, this.sql, params);
+  }
+
+  _runSync() {
+    return this.db.prepare(this.sql).run(...this.params);
+  }
+
+  async run() {
+    return this._runSync();
+  }
+
+  async all() {
+    return { results: this.db.prepare(this.sql).all(...this.params) };
+  }
+
+  async first() {
+    return this.db.prepare(this.sql).get(...this.params) || null;
+  }
+}
+
+class FakeD1Database {
+  constructor(db) {
+    this.db = db;
+  }
+
+  prepare(sql) {
+    return new FakeD1Statement(this.db, sql);
+  }
+
+  async batch(statements) {
+    const txn = this.db.transaction((entries) => entries.map((entry) => entry._runSync()));
+    return txn(statements);
+  }
 }
 
 // --- /health ---
@@ -128,6 +173,33 @@ describe('POST /track', () => {
     }));
     if (writeOps) await Promise.all(writeOps);
     expect(response.status).toBe(200);
+  });
+
+  it('canonicalizes a late event after /identify has already been recorded', async () => {
+    const sessionId = 'sess-identify-late';
+
+    const identified = await handler(postJSON('/identify', {
+      token: TOKEN,
+      project: PROJECT,
+      previous_id: 'anon-user-late',
+      user_id: 'user-late',
+    }));
+
+    expect(identified.response.status).toBe(200);
+
+    const tracked = await handler(postJSON('/track', {
+      token: TOKEN,
+      project: PROJECT,
+      event: 'signup',
+      properties: { path: '/signup' },
+      user_id: 'anon-user-late',
+      session_id: sessionId,
+    }));
+    if (tracked.writeOps) await Promise.all(tracked.writeOps);
+
+    const { response: eventsResponse } = await handler(get(`/events?project=${PROJECT}&session_id=${sessionId}`, authHeaders));
+    const eventsData = await eventsResponse.json();
+    expect(eventsData.events[0].user_id).toBe('user-late');
   });
 });
 
@@ -262,6 +334,85 @@ describe('OSS analytics endpoints', () => {
   it('returns 200 for /properties', async () => {
     const { response } = await handler(get(`/properties?project=${PROJECT}`, authHeaders));
     expect(response.status).toBe(200);
+  });
+});
+
+describe('Cloudflare D1 compatibility', () => {
+  it('upgrades a legacy D1 schema before track and identify writes run', async () => {
+    const legacyDb = new Database(':memory:');
+    legacyDb.exec(`
+      CREATE TABLE events (
+        id TEXT PRIMARY KEY,
+        project_id TEXT NOT NULL,
+        event TEXT NOT NULL,
+        properties TEXT,
+        user_id TEXT,
+        session_id TEXT,
+        timestamp INTEGER NOT NULL,
+        date TEXT NOT NULL
+      );
+      CREATE INDEX idx_events_project_date ON events(project_id, date);
+      CREATE INDEX idx_events_session ON events(session_id);
+      CREATE TABLE sessions (
+        session_id TEXT PRIMARY KEY,
+        user_id TEXT,
+        project_id TEXT NOT NULL,
+        start_time INTEGER NOT NULL,
+        end_time INTEGER NOT NULL,
+        duration INTEGER DEFAULT 0,
+        entry_page TEXT,
+        exit_page TEXT,
+        event_count INTEGER DEFAULT 1,
+        is_bounce INTEGER DEFAULT 1,
+        date TEXT NOT NULL
+      );
+      CREATE INDEX idx_sessions_project_date ON sessions(project_id, date);
+      CREATE INDEX idx_sessions_user ON sessions(project_id, user_id);
+    `);
+
+    const env = {
+      DB: new FakeD1Database(legacyDb),
+      PROJECT_TOKENS: TOKEN,
+      API_KEYS: API_KEY,
+    };
+    const waitUntilOps = [];
+    const ctx = {
+      waitUntil(promise) {
+        waitUntilOps.push(promise);
+      },
+    };
+
+    const trackResponse = await cloudflareWorker.fetch(postJSON('/track', {
+      token: TOKEN,
+      project: PROJECT,
+      event: 'page_view',
+      properties: { path: '/legacy-d1' },
+      user_id: 'anon-d1-user',
+      session_id: 'legacy-d1-session',
+    }), env, ctx);
+    await Promise.all(waitUntilOps);
+
+    expect(trackResponse.status).toBe(200);
+
+    const identifyResponse = await cloudflareWorker.fetch(postJSON('/identify', {
+      token: TOKEN,
+      project: PROJECT,
+      previous_id: 'anon-d1-user',
+      user_id: 'user-d1',
+    }), env, ctx);
+
+    expect(identifyResponse.status).toBe(200);
+
+    const columns = legacyDb.prepare('PRAGMA table_info(events)').all().map((column) => column.name);
+    expect(columns).toContain('country');
+
+    const identityColumns = legacyDb.prepare('PRAGMA table_info(identity_map)').all().map((column) => column.name);
+    expect(identityColumns).toContain('canonical_id');
+
+    const eventUser = legacyDb.prepare('SELECT user_id FROM events WHERE session_id = ?').get('legacy-d1-session');
+    expect(eventUser.user_id).toBe('user-d1');
+
+    legacyDb.close();
   });
 });
 
