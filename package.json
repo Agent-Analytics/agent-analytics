@@ -23,7 +23,7 @@
   "author": "Danny Shmueli",
   "license": "MIT",
   "dependencies": {
-    "@agent-analytics/core": "github:Agent-Analytics/agent-analytics-core#1ccff4c526df75b93cb5e8be5db08314fe877588",
+    "@agent-analytics/core": "github:Agent-Analytics/agent-analytics-core#af82346",
     "better-sqlite3": "^11.0.0"
   },
   "devDependencies": {
