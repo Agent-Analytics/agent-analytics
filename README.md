@@ -183,9 +183,9 @@ export AGENT_ANALYTICS_API_KEY=YOUR_API_KEY
 ```
 
 ```bash
-npx @agent-analytics/cli projects
-npx @agent-analytics/cli stats marketing-site --days 7
-npx @agent-analytics/cli events marketing-site --event signup_click --days 7 --limit 20
+npx --yes @agent-analytics/cli@0.5.21 projects
+npx --yes @agent-analytics/cli@0.5.21 stats marketing-site --days 7
+npx --yes @agent-analytics/cli@0.5.21 events marketing-site --event signup_click --days 7 --limit 20
 ```
 
 If your agent prefers raw JSON, use the HTTP API directly:
