@@ -145,6 +145,105 @@ Optional environment variables:
 
 The SQLite database is created automatically if it does not exist.
 
+### Docker
+
+Build and run the self-hosted Node.js server with SQLite persisted in a Docker volume:
+
+```bash
+docker build -t agent-analytics:local .
+
+docker run --rm \
+  -p 8787:8787 \
+  -e API_KEYS=YOUR_API_KEY \
+  -e PROJECT_TOKENS=YOUR_PROJECT_TOKEN \
+  -e DB_PATH=/data/analytics.db \
+  -v agent_analytics_data:/data \
+  agent-analytics:local
+```
+
+Then verify the server:
+
+```bash
+curl http://localhost:8787/health
+
+curl http://localhost:8787/track \
+  -H "Content-Type: application/json" \
+  -H "User-Agent: Mozilla/5.0 Smoke Test" \
+  -d '{"token":"YOUR_PROJECT_TOKEN","project":"marketing-site","event":"page_view","properties":{"path":"/"}}'
+
+curl "http://localhost:8787/stats?project=marketing-site&since=7d" \
+  -H "X-API-Key: YOUR_API_KEY"
+```
+
+Or point the CLI at the Docker server:
+
+```bash
+AGENT_ANALYTICS_URL=http://localhost:8787 \
+AGENT_ANALYTICS_API_KEY=YOUR_API_KEY \
+npx --yes @agent-analytics/cli@0.5.25 stats marketing-site --days 7
+```
+
+For local Compose:
+
+```bash
+API_KEYS=YOUR_API_KEY PROJECT_TOKENS=YOUR_PROJECT_TOKEN docker compose up --build
+```
+
+`compose.yaml` mounts a named volume at `/data`, so the SQLite file survives container restarts.
+
+### Kubernetes
+
+The included Kubernetes manifests run the OSS server as a single-replica `StatefulSet` with a persistent volume mounted at `/data`.
+
+No official container image is published yet. Build the image yourself and use that image in your cluster.
+
+For local clusters, build and load `agent-analytics:local` into the cluster runtime:
+
+```bash
+docker build -t agent-analytics:local .
+
+# kind
+kind load docker-image agent-analytics:local
+
+# minikube
+minikube image load agent-analytics:local
+```
+
+For remote clusters, push the image to your own registry and replace `agent-analytics:local` in `deploy/kubernetes/statefulset.yaml` with your registry image.
+
+Create secrets and apply the workload:
+
+```bash
+kubectl create secret generic agent-analytics-secrets \
+  --from-literal=API_KEYS=YOUR_API_KEY \
+  --from-literal=PROJECT_TOKENS=YOUR_PROJECT_TOKEN
+
+kubectl apply -f deploy/kubernetes/service.yaml
+kubectl apply -f deploy/kubernetes/statefulset.yaml
+```
+
+Optional ingress example:
+
+```bash
+kubectl apply -f deploy/kubernetes/ingress.example.yaml
+```
+
+Treat `ingress.example.yaml` as a template. Update the host, TLS secret, ingress class, and any provider-specific annotations for your cluster.
+
+### SQLite Operational Limits
+
+Docker is supported for one Node process serving many users calling `/track`; Docker is not the bottleneck. The practical limits are SQLite write serialization, disk speed, and long analytical reads competing with ingestion inside the Node process.
+
+For SQLite deployments:
+
+- run exactly one server process or Kubernetes pod against a given SQLite file
+- mount a persistent volume at `/data`
+- keep `DB_PATH=/data/analytics.db` or another path on that persistent volume
+- do not mount the same SQLite file into multiple pods or replicas
+- avoid network filesystems unless you have verified SQLite WAL locking behavior on that storage class
+
+Move beyond SQLite when you need sustained high write volume, frequent long-window analytical queries during ingestion, or horizontally scaled API replicas. That next step should be a database adapter backed by Postgres or another client/server database, then a Kubernetes `Deployment` can scale the API separately from storage.
+
 ## Add Tracking to Your Site
 
 ```html

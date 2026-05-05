@@ -21,6 +21,7 @@ const DB_PATH = process.env.DB_PATH || 'analytics.db';
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS || '';
 
 const db = new SqliteAdapter(DB_PATH);
+let shuttingDown = false;
 
 const handleRequest = createAnalyticsHandler({
   db,
@@ -30,6 +31,12 @@ const handleRequest = createAnalyticsHandler({
 });
 
 const server = createServer(async (req, res) => {
+  if (shuttingDown) {
+    res.writeHead(503, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'server shutting down' }));
+    return;
+  }
+
   try {
     const protocol = req.headers['x-forwarded-proto'] || 'http';
     const host = req.headers.host || `localhost:${PORT}`;
@@ -79,3 +86,39 @@ server.listen(PORT, () => {
   console.log(`Agent Analytics running on http://localhost:${PORT}`);
   console.log(`Database: ${DB_PATH}`);
 });
+
+function closeDatabase() {
+  try {
+    db.close();
+  } catch (err) {
+    console.error('Database close error:', err);
+  }
+}
+
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`${signal} received, shutting down...`);
+
+  const timeout = setTimeout(() => {
+    console.error('Graceful shutdown timed out');
+    closeDatabase();
+    process.exit(1);
+  }, 10000);
+  timeout.unref();
+
+  server.close((err) => {
+    if (err) {
+      console.error('Server close error:', err);
+      closeDatabase();
+      process.exit(1);
+    }
+
+    clearTimeout(timeout);
+    closeDatabase();
+    process.exit(0);
+  });
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

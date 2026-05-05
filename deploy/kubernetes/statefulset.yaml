@@ -1,0 +1,80 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: agent-analytics
+  labels:
+    app.kubernetes.io/name: agent-analytics
+spec:
+  serviceName: agent-analytics
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agent-analytics
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agent-analytics
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: agent-analytics
+          # No official image is published yet. Build this locally for kind/minikube,
+          # or replace it with your own registry image for remote clusters.
+          image: agent-analytics:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8787
+          env:
+            - name: PORT
+              value: "8787"
+            - name: DB_PATH
+              value: /data/analytics.db
+            - name: ALLOWED_ORIGINS
+              value: ""
+            - name: API_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: agent-analytics-secrets
+                  key: API_KEYS
+            - name: PROJECT_TOKENS
+              valueFrom:
+                secretKeyRef:
+                  name: agent-analytics-secrets
+                  key: PROJECT_TOKENS
+          volumeMounts:
+            - name: data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 5Gi

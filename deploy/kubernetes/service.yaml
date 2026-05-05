@@ -1,0 +1,14 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-analytics
+  labels:
+    app.kubernetes.io/name: agent-analytics
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: agent-analytics
+  ports:
+    - name: http
+      port: 8787
+      targetPort: http

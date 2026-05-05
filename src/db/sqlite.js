@@ -24,6 +24,7 @@ export class SqliteAdapter extends BaseAdapter {
     super();
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
+    this.db.pragma('busy_timeout = 5000');
     this._initSchema();
   }
 
@@ -115,5 +116,9 @@ export class SqliteAdapter extends BaseAdapter {
 
   async identifyUser(identityData) {
     return this._batch(buildIdentifyStatements(identityData));
+  }
+
+  close() {
+    this.db.close();
   }
 }
