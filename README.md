@@ -12,7 +12,7 @@ Web analytics your AI agent can read. Add one script tag, store events in your o
 
 Works with Claude Code, Codex, Cursor, OpenClaw, or any agent that can run commands and reason over structured output.
 
-Self-host this repo on Cloudflare Workers or Node.js. If you do not want to run infrastructure, use [Agent Analytics Cloud](https://app.agentanalytics.sh).
+Self-host this repo on Cloudflare Workers + D1 or Docker/Kubernetes + SQLite. If you do not want to run infrastructure, use [Agent Analytics Cloud](https://app.agentanalytics.sh).
 
 <p>
   <a href="https://docs.agentanalytics.sh/openapi.yaml"><img src="https://img.shields.io/badge/OpenAPI-3.1-6BA539?style=flat-square" alt="OpenAPI 3.1" /></a>
@@ -25,16 +25,36 @@ Self-host this repo on Cloudflare Workers or Node.js. If you do not want to run 
 ## Why Agent Analytics
 
 - Agent-readable by design. Your agent can call CLI commands or HTTP endpoints directly and reason over structured analytics data.
-- Self-hostable. Run the same OSS server on Cloudflare Workers + D1 or a single Node.js process backed by SQLite.
+- Self-hostable. Run the same OSS server on Cloudflare Workers + D1, Docker, Kubernetes, or a single Node.js process backed by SQLite.
 - Lightweight. Start with one script tag, then add custom events, consent mode, click tracking, errors, performance, and vitals only when you need them.
 
-## Choose Your Path
+## Choose Your Self-Hosted Route
 
-| Path | Best for | Tradeoff |
-| --- | --- | --- |
-| Cloudflare Workers | Recommended self-hosted path with low ops and a generous free tier | Requires a Cloudflare account and Wrangler deploy flow |
-| Node.js | Existing VPS, container, or local infrastructure | You manage process uptime, storage, backups, and TLS |
-| Managed Cloud | Fastest onboarding with no infrastructure | Hosted product, not this OSS repo |
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <p>
+        <img src="https://img.shields.io/badge/Cloudflare-Workers%20%2B%20D1-F38020?style=for-the-badge&logo=cloudflare&logoColor=white" alt="Cloudflare Workers + D1" />
+      </p>
+      <h3>Cloudflare Workers + D1</h3>
+      <p>The lowest-ops self-hosted route. Deploy the server as a Worker, store analytics in Cloudflare D1, and let Cloudflare handle edge runtime, TLS, and uptime.</p>
+      <p><strong>Best for:</strong> people who already use Cloudflare or want the smallest server-management surface.</p>
+      <p><strong>You manage:</strong> Wrangler deploys, D1 database setup, Worker secrets, and allowed origins.</p>
+    </td>
+    <td width="50%" valign="top">
+      <p>
+        <img src="https://img.shields.io/badge/Docker-Container-2496ED?style=for-the-badge&logo=docker&logoColor=white" alt="Docker" />
+        <img src="https://img.shields.io/badge/Kubernetes-StatefulSet-326CE5?style=for-the-badge&logo=kubernetes&logoColor=white" alt="Kubernetes" />
+      </p>
+      <h3>Docker / Kubernetes + SQLite</h3>
+      <p>The portable infrastructure route. Run the Node.js server in a container, persist SQLite on a volume, and optionally deploy it as a single-replica Kubernetes StatefulSet.</p>
+      <p><strong>Best for:</strong> local infrastructure, VPS/container hosts, kind/minikube tests, or teams that want to own the runtime.</p>
+      <p><strong>You manage:</strong> container uptime, SQLite persistence, backups, TLS/ingress, and the single-writer SQLite rule.</p>
+    </td>
+  </tr>
+</table>
+
+If you do not want to run infrastructure, use [Agent Analytics Cloud](https://app.agentanalytics.sh). That is the managed product, not this OSS server.
 
 ## What It Looks Like
 
@@ -88,7 +108,7 @@ Your agent can turn that into: "Traffic is up this week, most volume still comes
 
 ## Quick Start: Deploy
 
-### Cloudflare Workers (recommended)
+### Route 1: Cloudflare Workers + D1
 
 Runs on the free tier with Cloudflare D1.
 
@@ -127,25 +147,7 @@ If Wrangler cannot find your account, set `CLOUDFLARE_ACCOUNT_ID` first:
 export CLOUDFLARE_ACCOUNT_ID=your-account-id
 ```
 
-### Node.js
-
-```bash
-git clone https://github.com/Agent-Analytics/agent-analytics.git
-cd agent-analytics
-npm install
-
-API_KEYS=YOUR_API_KEY PROJECT_TOKENS=YOUR_PROJECT_TOKEN npm start
-```
-
-Optional environment variables:
-
-- `PORT=3000` to change the server port
-- `DB_PATH=./data/analytics.db` to choose the SQLite file location
-- `ALLOWED_ORIGINS=https://app.example.com,https://www.example.com` to restrict browser reads
-
-The SQLite database is created automatically if it does not exist.
-
-### Docker
+### Route 2: Docker / Kubernetes + SQLite
 
 Build and run the self-hosted Node.js server with SQLite persisted in a Docker volume:
 
@@ -191,9 +193,11 @@ API_KEYS=YOUR_API_KEY PROJECT_TOKENS=YOUR_PROJECT_TOKEN docker compose up --buil
 
 `compose.yaml` mounts a named volume at `/data`, so the SQLite file survives container restarts.
 
-### Kubernetes
+#### Kubernetes
 
-The included Kubernetes manifests run the OSS server as a single-replica `StatefulSet` with a persistent volume mounted at `/data`.
+The included Kubernetes manifests run the same Docker image as a single-replica `StatefulSet` with a persistent volume mounted at `/data`.
+
+For a full local `kind` walkthrough, including creating a live project and verifying it with the CLI, see [`deploy/kubernetes/README.md`](deploy/kubernetes/README.md).
 
 No official container image is published yet. Build the image yourself and use that image in your cluster.
 
@@ -229,6 +233,26 @@ kubectl apply -f deploy/kubernetes/ingress.example.yaml
 ```
 
 Treat `ingress.example.yaml` as a template. Update the host, TLS secret, ingress class, and any provider-specific annotations for your cluster.
+
+#### Plain Node.js
+
+If you do not want Docker, run the same server directly with Node.js:
+
+```bash
+git clone https://github.com/Agent-Analytics/agent-analytics.git
+cd agent-analytics
+npm install
+
+API_KEYS=YOUR_API_KEY PROJECT_TOKENS=YOUR_PROJECT_TOKEN npm start
+```
+
+Optional environment variables:
+
+- `PORT=3000` to change the server port
+- `DB_PATH=./data/analytics.db` to choose the SQLite file location
+- `ALLOWED_ORIGINS=https://app.example.com,https://www.example.com` to restrict browser reads
+
+The SQLite database is created automatically if it does not exist.
 
 ### SQLite Operational Limits
 
@@ -282,9 +306,9 @@ export AGENT_ANALYTICS_API_KEY=YOUR_API_KEY
 ```
 
 ```bash
-npx --yes @agent-analytics/cli@0.5.21 projects
-npx --yes @agent-analytics/cli@0.5.21 stats marketing-site --days 7
-npx --yes @agent-analytics/cli@0.5.21 events marketing-site --event signup_click --days 7 --limit 20
+npx --yes @agent-analytics/cli@0.5.25 projects
+npx --yes @agent-analytics/cli@0.5.25 stats marketing-site --days 7
+npx --yes @agent-analytics/cli@0.5.25 events marketing-site --event signup_click --days 7 --limit 20
 ```
 
 If your agent prefers raw JSON, use the HTTP API directly:
