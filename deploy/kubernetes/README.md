@@ -152,7 +152,7 @@ Point the published CLI at the kind-hosted server:
 ```bash
 AGENT_ANALYTICS_URL=http://127.0.0.1:18787 \
 AGENT_ANALYTICS_API_KEY=docker-read-key \
-npx --yes @agent-analytics/cli@0.5.25 stats kind-live-project --days 7
+npx --yes @agent-analytics/cli@0.5.35 stats kind-live-project --days 7
 ```
 
 Expected output:

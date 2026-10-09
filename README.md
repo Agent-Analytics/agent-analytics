@@ -182,7 +182,7 @@ Or point the CLI at the Docker server:
 ```bash
 AGENT_ANALYTICS_URL=http://localhost:8787 \
 AGENT_ANALYTICS_API_KEY=YOUR_API_KEY \
-npx --yes @agent-analytics/cli@0.5.25 stats marketing-site --days 7
+npx --yes @agent-analytics/cli@0.5.35 stats marketing-site --days 7
 ```
 
 For local Compose:
@@ -306,9 +306,9 @@ export AGENT_ANALYTICS_API_KEY=YOUR_API_KEY
 ```
 
 ```bash
-npx --yes @agent-analytics/cli@0.5.25 projects
-npx --yes @agent-analytics/cli@0.5.25 stats marketing-site --days 7
-npx --yes @agent-analytics/cli@0.5.25 events marketing-site --event signup_click --days 7 --limit 20
+npx --yes @agent-analytics/cli@0.5.35 projects
+npx --yes @agent-analytics/cli@0.5.35 stats marketing-site --days 7
+npx --yes @agent-analytics/cli@0.5.35 events marketing-site --event signup_click --days 7 --limit 20
 ```
 
 If your agent prefers raw JSON, use the HTTP API directly:
