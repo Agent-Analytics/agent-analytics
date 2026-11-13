@@ -372,7 +372,7 @@ Read endpoints require `X-API-Key`. Write endpoints use the public project token
 
 ## Read-only SQL
 
-`POST /sql` is the escape hatch when `/query` cannot say it. Prefer `/query`. The body is `{ "project", "sql" }` plus an optional time window: `days` (default 7, maximum 90) or both `date_from` and `date_to` (`YYYY-MM-DD`, span at most 90 days). Sending `days` together with a date bound is `400` and `INVALID_WINDOW`. The response is `{ "columns", "rows", "count", "truncated", "window", "statistics" }`. `window` is `{ "date_from", "date_to" }`. `statistics` is `{ "elapsed_ms", "rows_read", "expensive" }`.
+`POST /sql` is the escape hatch when `/query` cannot say it. Prefer `/query`. The body is `{ "project", "sql" }` plus an optional time window: `days` (default 7, maximum 90) or both `date_from` and `date_to` (`YYYY-MM-DD`, span at most 90 days). Sending `days` together with a date bound is `400` and `INVALID_WINDOW`. The response is `{ "columns", "rows", "count", "truncated", "window", "statistics" }`. `columns` is the ordered list of names. `rows` is an array of objects keyed by those names. `window` is `{ "date_from", "date_to" }`. `statistics` is `{ "elapsed_ms", "rows_read", "expensive" }`. A statement SQLite or D1 rejects is `400` and `INVALID_SQL`.
 
 ```bash
 curl -s -X POST "http://localhost:8787/sql" \

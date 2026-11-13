@@ -159,8 +159,8 @@ describe('POST /sql project isolation', () => {
       'id', 'event', 'properties', 'user_id', 'session_id', 'timestamp', 'date', 'country',
     ]);
     expect(data.rows).toHaveLength(1);
-    expect(data.rows[0][1]).toBe('page_view');
-    expect(data.rows.map((row) => row[1])).not.toContain('secret_event');
+    expect(data.rows[0].event).toBe('page_view');
+    expect(data.rows.map((row) => row.event)).not.toContain('secret_event');
     expect(data.count).toBe(1);
     expect(data.truncated).toBe(false);
     expect(data.statistics.rows_read).toBeNull();
@@ -174,7 +174,7 @@ describe('POST /sql project isolation', () => {
       sql: 'SELECT session_id, project_id FROM sessions',
     });
     expect(status).toBe(200);
-    expect(data.rows).toEqual([['sess-alpha', PROJECT]]);
+    expect(data.rows).toEqual([{ session_id: 'sess-alpha', project_id: PROJECT }]);
   });
 
   it('does not expose project_id or resolved_user_id on events', async () => {
@@ -204,7 +204,7 @@ describe('POST /sql project isolation', () => {
     });
     expect(status).toBe(200);
     expect(data.columns).toEqual(['path']);
-    expect(data.rows).toEqual([['/pricing']]);
+    expect(data.rows).toEqual([{ path: '/pricing' }]);
   });
 });
 
@@ -256,7 +256,7 @@ describe('POST /sql statement rejection', () => {
       sql: "SELECT 'DELETE' AS word",
     });
     expect(status).toBe(200);
-    expect(data.rows).toEqual([['DELETE']]);
+    expect(data.rows).toEqual([{ word: 'DELETE' }]);
   });
 
   it('allows a comment that does not contain a write keyword', async () => {
@@ -265,7 +265,7 @@ describe('POST /sql statement rejection', () => {
       sql: "SELECT 'ok' AS word -- count page views",
     });
     expect(status).toBe(200);
-    expect(data.rows).toEqual([['ok']]);
+    expect(data.rows).toEqual([{ word: 'ok' }]);
   });
 
   it('rejects sql larger than 20 KB', async () => {
@@ -313,7 +313,8 @@ describe('POST /sql time window', () => {
   });
 
   function names(data) {
-    return data.rows.map((row) => row[0]).sort();
+    const key = data.columns[0];
+    return data.rows.map((row) => row[key]).sort();
   }
 
   it('leaves rows outside the default 7 day window out of the result', async () => {
@@ -410,7 +411,7 @@ describe('POST /sql join limit', () => {
       sql: "SELECT a.event FROM events a JOIN events b ON a.id = b.id WHERE a.event = 'page_view'",
     });
     expect(status).toBe(200);
-    expect(data.rows).toEqual([['page_view']]);
+    expect(data.rows).toEqual([{ event: 'page_view' }]);
   });
 });
 
@@ -450,14 +451,14 @@ describe('POST /sql row cap', () => {
     expect(uncapped.data.count).toBe(1000);
     expect(uncapped.data.rows).toHaveLength(1000);
     expect(uncapped.data.truncated).toBe(true);
-    expect(uncapped.data.rows.every((row) => row[0] === 'bulk')).toBe(true);
+    expect(uncapped.data.rows.every((row) => row.event === 'bulk')).toBe(true);
 
     const capped = await capSql("SELECT event FROM events WHERE event = 'bulk' LIMIT 5000");
     expect(capped.data.count).toBe(1000);
     expect(capped.data.truncated).toBe(true);
 
     const small = await capSql("SELECT event FROM events WHERE event = 'bulk' LIMIT 2");
-    expect(small.data.rows).toEqual([['bulk'], ['bulk']]);
+    expect(small.data.rows).toEqual([{ event: 'bulk' }, { event: 'bulk' }]);
     expect(small.data.truncated).toBe(false);
 
     const commented = await capSql("SELECT event FROM events WHERE event = 'bulk' -- page views");
@@ -508,6 +509,8 @@ describe('SQL response statistics', () => {
     });
     expect(response.status).toBe(200);
     const data = await response.json();
+    expect(data.rows).toEqual([{ event: 'page_view' }]);
+    expect(data.columns).toEqual(['event']);
     expect(data.statistics).toEqual({
       elapsed_ms: 12,
       rows_read: 1_000_001,
@@ -540,6 +543,32 @@ describe('SQL response statistics', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('maps a D1 user SQL error to INVALID_SQL', async () => {
+    const response = await handleSqlRequest(postJSON('/sql', {
+      project: PROJECT,
+      sql: 'SELECT event FROM events',
+    }, { 'X-API-Key': API_KEY }), {
+      validateRead: () => ({ valid: true }),
+      executeSql: async () => {
+        throw new Error('D1_ERROR: no such column: nope: SQLITE_ERROR');
+      },
+    });
+    expect(response.status).toBe(400);
+    const data = await response.json();
+    expect(data.error).toBe('INVALID_SQL');
+    expect(data.message).toMatch(/no such column/);
+  });
+
+  it('maps a SQLite user SQL error from the read-only connection to INVALID_SQL', async () => {
+    const { status, data } = await sql({
+      project: PROJECT,
+      sql: 'SELECT missing_col FROM events',
+    });
+    expect(status).toBe(400);
+    expect(data.error).toBe('INVALID_SQL');
+    expect(data.message).toMatch(/no such column/);
   });
 
   it('maps a database timeout to SQL_TIMEOUT', async () => {
@@ -598,7 +627,7 @@ describe('Workers POST /sql', () => {
     }, { 'X-API-Key': API_KEY }), env, ctx);
     expect(selected.status).toBe(200);
     const selectedData = await selected.json();
-    expect(selectedData.rows).toEqual([['page_view']]);
+    expect(selectedData.rows).toEqual([{ event: 'page_view' }]);
     expect(selectedData.truncated).toBe(false);
 
     const before = database.prepare('SELECT count(*) AS n FROM events').get().n;

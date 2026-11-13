@@ -80,6 +80,20 @@ function isTimeout(error) {
   return /timeout|timed out|SQLITE_INTERRUPT|CPU time limit|exceeded the time/i.test(text);
 }
 
+function errorText(error) {
+  return `${error?.code || ''} ${error?.message || ''} ${error?.cause?.code || ''} ${error?.cause?.message || ''}`;
+}
+
+// User SQL that SQLite or D1 rejects. D1 often throws a plain Error whose
+// message contains D1_ERROR or SQLITE_ERROR and whose code is empty, which
+// used to fall through to 500.
+function isUserSqlError(error) {
+  const code = String(error?.code || '');
+  if (code === 'SQLITE_BUSY' || code === 'SQLITE_LOCKED') return false;
+  if (code.startsWith('SQLITE_')) return true;
+  return /SQLITE_|D1_ERROR|D1_EXEC_ERROR|no such column|no such table|no such function|syntax error|unrecognized token/i.test(errorText(error));
+}
+
 function failureResponse(error) {
   if (isTimeout(error) || error?.code === 'SQL_TIMEOUT') {
     return json(errorResponse('SQL_TIMEOUT', 'sql timed out'), 504);
@@ -94,7 +108,7 @@ function failureResponse(error) {
   if (sqliteCode === 'SQLITE_BUSY' || sqliteCode === 'SQLITE_LOCKED') {
     return json(errorResponse('INTERNAL_ERROR', 'database is busy'), 500);
   }
-  if (sqliteCode.startsWith('SQLITE_')) {
+  if (isUserSqlError(error)) {
     return json(errorResponse('INVALID_SQL', clientMessage(error)), 400);
   }
 
@@ -102,16 +116,28 @@ function failureResponse(error) {
   return json(errorResponse(ERROR_CODES.INTERNAL_ERROR, 'internal error'), 500);
 }
 
+function rowObject(columns, row) {
+  if (row && typeof row === 'object' && !Array.isArray(row)) return row;
+  const values = Array.isArray(row) ? row : [];
+  const object = {};
+  columns.forEach((column, index) => {
+    const value = values[index];
+    object[column] = value === undefined ? null : value;
+  });
+  return object;
+}
+
 export function shapeSqlResult({ columns, rows, elapsed_ms, rows_read, returnLimit = 1000 }) {
   const list = Array.isArray(rows) ? rows : [];
+  const names = Array.isArray(columns) ? columns : [];
   const cap = Number.isInteger(returnLimit) && returnLimit >= 0 ? returnLimit : 1000;
   const truncated = list.length > cap;
   const kept = truncated ? list.slice(0, cap) : list;
   const read = Number.isFinite(rows_read) ? rows_read : null;
 
   return {
-    columns: Array.isArray(columns) ? columns : [],
-    rows: kept,
+    columns: names,
+    rows: kept.map((row) => rowObject(names, row)),
     count: kept.length,
     truncated,
     statistics: {
