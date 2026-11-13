@@ -22,10 +22,51 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export class SqliteAdapter extends BaseAdapter {
   constructor(dbPath = 'analytics.db') {
     super();
+    this.dbPath = dbPath;
+    this.memory = dbPath === ':memory:';
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('busy_timeout = 5000');
     this._initSchema();
+    // A private :memory: database cannot be opened a second time. File
+    // databases get a durable read-only connection. Memory databases copy a
+    // snapshot into a read-only connection for each statement.
+    this.readDb = this.memory ? null : this._openReadOnlyConnection();
+    if (this.readDb) {
+      this.readDb.pragma('busy_timeout = 5000');
+      this.readDb.pragma('query_only = ON');
+    }
+  }
+
+  _openReadOnlyConnection() {
+    return new Database(this.dbPath, { readonly: true, fileMustExist: true });
+  }
+
+  _readConnection() {
+    if (!this.memory) return this.readDb;
+    return new Database(this.db.serialize(), { readonly: true });
+  }
+
+  /**
+   * Run a prepared statement on a read-only connection.
+   * Writes fail even if the caller skips the SQL parser.
+   */
+  executeReadOnly(sql, params = []) {
+    const connection = this._readConnection();
+    const started = performance.now();
+    try {
+      const statement = connection.prepare(sql);
+      const columns = statement.columns().map((column) => column.name);
+      const rows = statement.raw().all(...params);
+      return {
+        columns,
+        rows,
+        elapsed_ms: performance.now() - started,
+        rows_read: null,
+      };
+    } finally {
+      if (this.memory) connection.close();
+    }
   }
 
   _initSchema() {
@@ -119,6 +160,14 @@ export class SqliteAdapter extends BaseAdapter {
   }
 
   close() {
+    if (this.readDb) {
+      try {
+        this.readDb.close();
+      } catch (error) {
+        console.error('Read connection close error:', error);
+      }
+      this.readDb = null;
+    }
     this.db.close();
   }
 }

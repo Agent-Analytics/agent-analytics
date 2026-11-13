@@ -36,7 +36,18 @@ jobs:
           curl -sf http://localhost:8787/health | grep -q '"ok"'
           curl -sf -X POST http://localhost:8787/track \
             -H 'Content-Type: application/json' \
+            -H 'User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' \
             -d '{"token":"pt_smoke","project":"smoke","event":"test_event"}' | grep -q '"ok"'
           curl -sf 'http://localhost:8787/stats?project=smoke' \
             -H 'X-API-Key: smoke-key' | grep -q '"totals"'
+          curl -sf -X POST http://localhost:8787/sql \
+            -H 'Content-Type: application/json' \
+            -H 'X-API-Key: smoke-key' \
+            -d '{"project":"smoke","sql":"SELECT event FROM events"}' | grep -q 'test_event'
+          code=$(curl -s -o /tmp/sql-reject.json -w '%{http_code}' -X POST http://localhost:8787/sql \
+            -H 'Content-Type: application/json' \
+            -H 'X-API-Key: smoke-key' \
+            -d '{"project":"smoke","sql":"DELETE FROM events"}')
+          test "$code" = "400"
+          grep -q 'INVALID_SQL' /tmp/sql-reject.json
           kill %1
