@@ -3,6 +3,7 @@
  */
 
 import { ulid } from '@agent-analytics/core/ulid';
+import { sha256Hex } from './hash.js';
 
 export const ERASURE_ACCOUNT_ID = 'oss';
 export const ERASURE_REQUESTED_BY = 'api_key';
@@ -85,9 +86,10 @@ export async function pruneExpiredReceipts(db, now = Date.now()) {
 }
 
 export async function findErasureByKey(db, idempotencyKey) {
+  const keyHash = await sha256Hex(idempotencyKey);
   return db._queryOne(
-    `SELECT * FROM erasure_requests WHERE account_id = ? AND idempotency_key = ?`,
-    [ERASURE_ACCOUNT_ID, idempotencyKey],
+    `SELECT * FROM erasure_requests WHERE account_id = ? AND idempotency_key_hash = ?`,
+    [ERASURE_ACCOUNT_ID, keyHash],
   );
 }
 
@@ -111,7 +113,7 @@ export async function listErasuresForProject(db, project) {
 export async function insertRunningErasure(db, row) {
   await db._run(
     `INSERT INTO erasure_requests (
-       id, account_id, project_id, project_name, idempotency_key,
+       id, account_id, project_id, project_name, idempotency_key_hash,
        subject_type, subject_hash, status, counts_json, error,
        created_at, started_at, completed_at, requested_by, body_hash, replay_included
      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'running', ?, NULL, ?, ?, NULL, ?, ?, ?)`,
@@ -120,7 +122,7 @@ export async function insertRunningErasure(db, row) {
       ERASURE_ACCOUNT_ID,
       row.project,
       row.project,
-      row.idempotencyKey,
+      await sha256Hex(row.idempotencyKey),
       row.subjectType,
       row.subjectHash,
       JSON.stringify(emptyCounts()),

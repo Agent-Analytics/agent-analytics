@@ -12,7 +12,7 @@ import { ensureD1Compatibility } from '../db/d1.js';
 import { makeValidateWrite, makeValidateRead } from '../auth.js';
 import { createErasureHandler } from '../erasures/handler.js';
 import { CREATE_ERASURE_INDEX, CREATE_ERASURE_REQUESTS } from '../erasures/sql.js';
-import { erasureFingerprint } from '../erasures/hash.js';
+import { erasureFingerprint, sha256Hex } from '../erasures/hash.js';
 import { ERASURE_ACCOUNT_ID, ERASURE_REQUESTED_BY } from '../erasures/receipt.js';
 import cloudflareWorker from '../platforms/cloudflare.js';
 
@@ -229,18 +229,18 @@ describe('POST /erasures auth and body', () => {
 
   it('rejects portfolio erasure', async () => {
     const { handler, raw } = setup();
-    insertEvent(raw, { id: 'e1', project: 'alpha', userId: 'person@example.com' });
+    insertEvent(raw, { id: 'e1', project: 'alpha', userId: 'user-1' });
     const result = await erase(handler, {
       project: 'alpha',
       idempotency_key: 'portfolio',
       confirm: 'erase',
-      email: 'person@example.com',
+      user_id: 'user-1',
       portfolio: true,
     });
     expect(result.status).toBe(400);
     expect(result.data.error).toBe('INVALID_ERASURE');
+    expect(result.data.message).toMatch(/portfolio/);
     expect(countEvents(raw, 'alpha')).toBe(1);
-    expect(result.text).not.toContain('person@example.com');
   });
 });
 
@@ -330,9 +330,90 @@ describe('identity_map walk', () => {
     expect(stored.account_id).toBe(ERASURE_ACCOUNT_ID);
     expect(stored.project_name).toBe('walk-a');
     expect(stored.subject_hash).toMatch(/^[a-f0-9]{64}$/);
+    expect(stored.idempotency_key_hash).toBe(await sha256Hex('walk-anon'));
+    expect(stored.idempotency_key_hash).not.toBe('walk-anon');
     expect(JSON.stringify(stored)).not.toContain(anon);
     expect(JSON.stringify(stored)).not.toContain(known);
+    expect(JSON.stringify(stored)).not.toContain('walk-anon');
     expect(JSON.stringify(stored)).not.toContain(API_KEY);
+  });
+});
+
+describe('shared sessions', () => {
+  it('keeps a session alice shares with bob and deletes a session that is only alice', async () => {
+    const { handler, raw } = setup();
+    insertEvent(raw, { id: 'alice-shared', project: 'share-a', userId: 'alice', sessionId: 'shared-session' });
+    insertEvent(raw, { id: 'bob-shared', project: 'share-a', userId: 'bob', sessionId: 'shared-session' });
+    raw.prepare('UPDATE events SET timestamp = 5 WHERE id = ?').run('bob-shared');
+    insertSession(raw, { sessionId: 'shared-session', project: 'share-a', userId: 'alice' });
+    raw.prepare(
+      `UPDATE sessions
+          SET event_count = 9, start_time = 1, end_time = 2, duration = 1, is_bounce = 0
+        WHERE session_id = ?`,
+    ).run('shared-session');
+    insertEvent(raw, { id: 'alice-only', project: 'share-a', userId: 'alice', sessionId: 'alice-session' });
+    insertSession(raw, { sessionId: 'alice-session', project: 'share-a', userId: 'alice' });
+
+    insertEvent(raw, { id: 'alice-b', project: 'share-b', userId: 'alice', sessionId: 'shared-b' });
+    insertEvent(raw, { id: 'bob-b', project: 'share-b', userId: 'bob', sessionId: 'shared-b' });
+    insertSession(raw, { sessionId: 'shared-b', project: 'share-b', userId: 'alice' });
+    const betaBefore = snapshot(raw, 'share-b');
+
+    const result = await erase(handler, {
+      project: 'share-a',
+      idempotency_key: 'erase-alice',
+      confirm: 'erase',
+      user_id: 'alice',
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.data.status).toBe('completed');
+    expect(result.data.counts.events).toBe(2);
+    expect(result.data.counts.sessions).toBe(1);
+    expect(snapshot(raw, 'share-a')).toEqual({
+      events: [{
+        id: 'bob-shared',
+        user_id: 'bob',
+        session_id: 'shared-session',
+        properties: null,
+      }],
+      sessions: [{ session_id: 'shared-session', user_id: 'bob' }],
+      identity: [],
+    });
+    expect(raw.prepare(
+      `SELECT event_count, start_time, end_time, duration, is_bounce
+         FROM sessions WHERE session_id = ?`,
+    ).get('shared-session')).toEqual({
+      event_count: 1,
+      start_time: 5,
+      end_time: 5,
+      duration: 0,
+      is_bounce: 1,
+    });
+    expect(snapshot(raw, 'share-b')).toEqual(betaBefore);
+    expect(result.text).not.toContain('alice');
+    expect(result.text).not.toContain('bob');
+    expect(JSON.stringify(raw.prepare('SELECT * FROM erasure_requests').all())).not.toContain('erase-alice');
+  });
+
+  it('still deletes a shared session when the subject is that session_id', async () => {
+    const { handler, raw } = setup();
+    insertEvent(raw, { id: 'alice-shared', project: 'share-a', userId: 'alice', sessionId: 'shared-session' });
+    insertEvent(raw, { id: 'bob-shared', project: 'share-a', userId: 'bob', sessionId: 'shared-session' });
+    insertSession(raw, { sessionId: 'shared-session', project: 'share-a', userId: 'alice' });
+
+    const result = await erase(handler, {
+      project: 'share-a',
+      idempotency_key: 'erase-shared-session',
+      confirm: 'erase',
+      session_id: 'shared-session',
+    });
+
+    expect(result.status).toBe(200);
+    expect(result.data.counts.events).toBe(2);
+    expect(result.data.counts.sessions).toBe(1);
+    expect(snapshot(raw, 'share-a')).toEqual({ events: [], sessions: [], identity: [] });
+    expect(result.text).not.toContain('shared-session');
   });
 });
 
@@ -384,7 +465,7 @@ describe('session_id erasure', () => {
 });
 
 describe('email erasure', () => {
-  it('does not delete rows when there is no email lookup index', async () => {
+  it('rejects email because this server has no email lookup', async () => {
     const { handler, raw } = setup();
     const email = 'person@example.com';
     insertEvent(raw, { id: 'email-a', project: 'mail-a', userId: email });
@@ -398,21 +479,26 @@ describe('email erasure', () => {
       email,
     });
 
-    expect(result.status).toBe(200);
-    expect(result.data.status).toBe('completed');
-    expect(result.data.subject_type).toBe('email');
-    expect(result.data.counts).toEqual({
-      events: 0,
-      sessions: 0,
-      identity_rows: 0,
-      profiles: 0,
-      email_lookups: 0,
-      replay_sessions: 0,
-      replay_objects: 0,
-    });
+    expect(result.status).toBe(400);
+    expect(result.data.error).toBe('INVALID_ERASURE');
+    expect(result.data.message).toBe('email erasure is not supported on self-hosted because there is no email lookup');
     expect(countEvents(raw, 'mail-a')).toBe(1);
     expect(snapshot(raw, 'mail-b')).toEqual(betaBefore);
+    expect(raw.prepare('SELECT COUNT(*) AS n FROM erasure_requests').get().n).toBe(0);
     expect(result.text).not.toContain(email);
+
+    const withPortfolio = await erase(handler, {
+      project: 'mail-a',
+      idempotency_key: 'email-portfolio',
+      confirm: 'erase',
+      email,
+      portfolio: true,
+    });
+    expect(withPortfolio.status).toBe(400);
+    expect(withPortfolio.data.error).toBe('INVALID_ERASURE');
+    expect(withPortfolio.data.message).toBe('email erasure is not supported on self-hosted because there is no email lookup');
+    expect(withPortfolio.text).not.toContain(email);
+    expect(countEvents(raw, 'mail-a')).toBe(1);
   });
 });
 
@@ -434,6 +520,9 @@ describe('idempotency', () => {
     expect(first.status).toBe(200);
     expect(first.data.counts.events).toBe(1);
     expect(countEvents(raw, 'idem-a')).toBe(0);
+    const storedKey = raw.prepare('SELECT idempotency_key_hash FROM erasure_requests WHERE id = ?').get(first.data.id);
+    expect(storedKey.idempotency_key_hash).toBe(await sha256Hex('same-key'));
+    expect(JSON.stringify(raw.prepare('SELECT * FROM erasure_requests').all())).not.toContain('same-key');
 
     insertEvent(raw, { id: 'idem-a2', project: 'idem-a', userId: user });
     const second = await erase(handler, { ...body, note: 'ignored extra field' });
@@ -472,7 +561,7 @@ describe('idempotency', () => {
     const now = Date.now();
     raw.prepare(
       `INSERT INTO erasure_requests (
-         id, account_id, project_id, project_name, idempotency_key,
+         id, account_id, project_id, project_name, idempotency_key_hash,
          subject_type, subject_hash, status, counts_json, error,
          created_at, started_at, completed_at, requested_by, body_hash, replay_included
        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'failed', ?, 'erasure failed', ?, ?, NULL, ?, ?, 1)`,
@@ -481,7 +570,7 @@ describe('idempotency', () => {
       ERASURE_ACCOUNT_ID,
       'retry-a',
       'retry-a',
-      'retry-key',
+      await sha256Hex('retry-key'),
       'user_id',
       fingerprint.subjectHash,
       JSON.stringify({
@@ -599,14 +688,14 @@ describe('GET /erasures', () => {
       const suffix = String(index + 1).padStart(26, '0');
       raw.prepare(
         `INSERT INTO erasure_requests (
-           id, account_id, project_id, project_name, idempotency_key,
+           id, account_id, project_id, project_name, idempotency_key_hash,
            subject_type, subject_hash, status, counts_json, error,
            created_at, started_at, completed_at, requested_by, body_hash, replay_included
          ) VALUES (?, ?, 'list-a', 'list-a', ?, 'user_id', ?, 'completed', '{}', NULL, ?, ?, ?, ?, ?, 1)`,
       ).run(
         `era_${suffix}`,
         ERASURE_ACCOUNT_ID,
-        `list-extra-${index}`,
+        await sha256Hex(`list-extra-${index}`),
         'ab'.repeat(32),
         index + 1,
         index + 1,
@@ -617,13 +706,14 @@ describe('GET /erasures', () => {
     }
     raw.prepare(
       `INSERT INTO erasure_requests (
-         id, account_id, project_id, project_name, idempotency_key,
+         id, account_id, project_id, project_name, idempotency_key_hash,
          subject_type, subject_hash, status, counts_json, error,
          created_at, started_at, completed_at, requested_by, body_hash, replay_included
-       ) VALUES (?, ?, 'list-b', 'list-b', 'other-project', 'user_id', ?, 'completed', '{}', NULL, 1000, 1000, 1000, ?, ?, 1)`,
+       ) VALUES (?, ?, 'list-b', 'list-b', ?, 'user_id', ?, 'completed', '{}', NULL, 1000, 1000, 1000, ?, ?, 1)`,
     ).run(
       `era_${'Z'.repeat(26)}`,
       ERASURE_ACCOUNT_ID,
+      await sha256Hex('other-project'),
       'ef'.repeat(32),
       ERASURE_REQUESTED_BY,
       '11'.repeat(32),

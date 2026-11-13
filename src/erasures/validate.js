@@ -52,8 +52,8 @@ export function validateErasureBody(body) {
     return invalid('confirm_large must be a boolean');
   }
 
-  if (body.portfolio === true && subjectType !== 'email') {
-    return invalid('portfolio is only valid for an email subject');
+  if (subjectType === 'email') {
+    return invalid('email erasure is not supported on self-hosted because there is no email lookup');
   }
 
   if (body.portfolio === true) {

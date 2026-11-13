@@ -10,7 +10,7 @@ CREATE TABLE IF NOT EXISTS erasure_requests (
   account_id TEXT NOT NULL,
   project_id TEXT NOT NULL,
   project_name TEXT NOT NULL,
-  idempotency_key TEXT NOT NULL,
+  idempotency_key_hash TEXT NOT NULL,
   subject_type TEXT NOT NULL,
   subject_hash TEXT NOT NULL,
   status TEXT NOT NULL,
@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS erasure_requests (
   requested_by TEXT NOT NULL,
   body_hash TEXT NOT NULL,
   replay_included INTEGER NOT NULL,
-  UNIQUE (account_id, idempotency_key)
+  UNIQUE (account_id, idempotency_key_hash)
 )
 `.trim();
 

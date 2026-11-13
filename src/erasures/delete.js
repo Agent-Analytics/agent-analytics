@@ -3,9 +3,9 @@
  *
  * SQL lives in @agent-analytics/core (eraseSubjectRows). includeHostedIdentity
  * stays false: this server has identity_map only, and no email lookup index.
- * An email subject therefore resolves to no user ids. Replay objects are not
- * stored. The executor reports changes at the top level because the helper
- * reads result.changes, while D1 puts that number on meta.changes.
+ * Email subjects are rejected before this function runs. Replay objects are
+ * not stored. The executor copies D1 meta.changes onto result.changes. A
+ * missing count stays missing so the helper can apply its own fallback.
  */
 
 import {
@@ -29,7 +29,8 @@ export function erasureExecutor(db) {
       const result = await db._run(sql, params);
       const reported = result?.changes ?? result?.meta?.changes;
       const changes = Number(reported);
-      return { changes: Number.isFinite(changes) ? changes : 0 };
+      if (Number.isFinite(changes)) return { changes };
+      return {};
     },
   };
 }
@@ -64,6 +65,10 @@ export async function projectHasRows(db, project) {
 }
 
 export async function deleteSubjectRows(db, { project, subjectType, subject }) {
+  if (subjectType === 'email') {
+    throw new Error('email erasure is not supported on self-hosted because there is no email lookup');
+  }
+
   const executor = erasureExecutor(db);
   if (subjectType === 'session_id') {
     const erased = await eraseRows(executor, {
@@ -75,11 +80,10 @@ export async function deleteSubjectRows(db, { project, subjectType, subject }) {
     return erased.counts;
   }
 
-  // Email has no lookup index on this server, so the helper receives no user ids.
   const erased = await eraseRows(executor, {
     project,
     mode: 'user_ids',
-    userIds: subjectType === 'email' ? [] : [subject],
+    userIds: [subject],
     includeHostedIdentity: false,
   });
   return erased.counts;
