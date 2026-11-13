@@ -235,8 +235,13 @@ describe('POST /sql statement rejection', () => {
     'SELECT * FROM events LIMIT 1e10',
     'SELECT * FROM events LIMIT (SELECT 100000)',
     'SELECT * FROM events LIMIT -1',
-    "SELECT replace('page_view', 'page_', '')",
     'SELECT event FROM events -- DELETE FROM events',
+    'SELECT * FROM (identity_map)',
+    'SELECT event FROM events LEFT JOIN (x) ON 1 = 1',
+    'SELECT * FROM (events), (other)',
+    "SELECT * FROM (pragma_table_info('events'))",
+    "SELECT * FROM (json_each('[1]'))",
+    'SELECT * FROM ((events)) a, (events) b',
     'WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 3) SELECT n FROM c',
     'SELECT a.event FROM events a, events b, events c',
     "SELECT 1 WHERE 'x' IN identity_map",
@@ -252,6 +257,15 @@ describe('POST /sql statement rejection', () => {
     expect(status).toBe(400);
     expect(data.error).toBe('INVALID_SQL');
     expect(after.data.rows).toEqual(before.data.rows);
+  });
+
+  it('allows scalar replace()', async () => {
+    const { status, data } = await sql({
+      project: PROJECT,
+      sql: "SELECT replace('page_view', 'page_', '') AS word",
+    });
+    expect(status).toBe(200);
+    expect(data.rows).toEqual([{ word: 'view' }]);
   });
 
   it('allows a write keyword inside a string literal', async () => {
