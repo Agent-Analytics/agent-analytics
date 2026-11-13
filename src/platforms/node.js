@@ -10,9 +10,10 @@
  */
 
 import { createServer } from 'node:http';
-import { createAnalyticsHandler, MAX_BODY_BYTES } from '@agent-analytics/core';
+import { MAX_BODY_BYTES } from '@agent-analytics/core';
 import { SqliteAdapter } from '../db/sqlite.js';
 import { makeValidateWrite, makeValidateRead } from '../auth.js';
+import { createOssHandler } from '../oss-handler.js';
 
 const PORT = parseInt(process.env.PORT || '8787', 10);
 const API_KEYS = process.env.API_KEYS || '';
@@ -23,11 +24,12 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS || '';
 const db = new SqliteAdapter(DB_PATH);
 let shuttingDown = false;
 
-const handleRequest = createAnalyticsHandler({
+const handleRequest = createOssHandler({
   db,
   validateWrite: makeValidateWrite(PROJECT_TOKENS),
   validateRead: makeValidateRead(API_KEYS),
   allowedOrigins: ALLOWED_ORIGINS ? ALLOWED_ORIGINS.split(',').map(o => o.trim()) : undefined,
+  executeSql: (prepared) => db.executeReadOnly(prepared.sql, prepared.params),
 });
 
 const server = createServer(async (req, res) => {

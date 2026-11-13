@@ -360,8 +360,43 @@ The self-hosted server in this repo exposes these routes:
 - `GET /projects`
 - `GET /stats?project=...`
 - `GET /events?project=...`
+- `POST /query`
+- `POST /paths`
+- `GET /properties?project=...`
+- `GET /properties/received?project=...`
+- `POST /sql`
 
 Read endpoints require `X-API-Key`. Write endpoints use the public project token in the JSON body. The public docs and OpenAPI spec cover the broader Agent Analytics platform too, so treat the list above as the source of truth for the OSS server in this repo.
+
+`POST /query` is the supported way to aggregate. `group_by` accepts the fields `event`, `date`, `user_id`, `session_id`, and `country`, plus at most one `properties.<key>`. The property value comes back on the row under that same `properties.<key>` name. Two `properties.*` entries return `400` with `INVALID_GROUP_BY`.
+
+## Read-only SQL
+
+`POST /sql` is the escape hatch when `/query` cannot say it. Prefer `/query`. The body is `{ "project", "sql" }`. The response is `{ "columns", "rows", "count", "truncated", "statistics" }`. `statistics` is `{ "elapsed_ms", "rows_read", "expensive" }`.
+
+```bash
+curl -s -X POST "http://localhost:8787/sql" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{"project":"marketing-site","sql":"SELECT event, count(*) AS event_count FROM events GROUP BY event"}'
+```
+
+The read API key is required. That key can query every project stored in the database. `project` chooses which rows the statement can see. It is not a separate authorization boundary.
+
+One `SELECT` is accepted, up to 20 KB. Leading `WITH` is rejected. Parsing and the project wrapper come from `@agent-analytics/core`. The server exposes only these columns:
+
+- `events`: `id`, `event`, `properties`, `user_id`, `session_id`, `timestamp`, `date`, `country`
+- `sessions`: `session_id`, `user_id`, `project_id`, `start_time`, `end_time`, `duration`, `entry_page`, `exit_page`, `event_count`, `is_bounce`, `date`
+
+`properties` is a JSON string. Use `json_extract` in the statement. Writes, extra statements, schema-qualified names (`main.events`, `temp.events`), catalog tables (`sqlite_master`, `sqlite_schema`, `sqlite_temp_master`), and any other table are rejected with `400` and `INVALID_SQL`. The project name is a bound parameter.
+
+Results are capped at 1,000 rows. `truncated` is true when another row existed past that cap. A missing `LIMIT` is filled in by the server. A caller `LIMIT` above 1,000 is reduced to the cap.
+
+Node, Docker, and Kubernetes run the statement on a second SQLite connection opened read-only (`query_only` as well). A parser miss cannot write the database file. `DB_PATH=:memory:` cannot be opened twice by the driver, so each statement there runs on a read-only snapshot of that database. `rows_read` is null on the Node path because SQLite does not report it, and `expensive` stays false.
+
+Cloudflare Workers runs the same parser, then executes on the D1 binding named `DB`. That binding can write. Workers has no read-only D1 connection, so the parser is the only write barrier. Treat the Workers deployment as the weaker of the two. When D1 returns `meta.rows_read`, it is copied to `statistics.rows_read`, and `expensive` is true above 1,000,000 rows read. A database timeout surfaces as `504` and `SQL_TIMEOUT`.
+
+This OSS server has no account plan and no hosted rows-read budget. It does not return `PRO_REQUIRED`, `SQL_BUDGET`, or `SQL_UNAVAILABLE`. Those gates belong to Agent Analytics Cloud. A long scan on Node blocks the process until SQLite finishes, because the driver call is synchronous.
 
 ## Contributing
 
