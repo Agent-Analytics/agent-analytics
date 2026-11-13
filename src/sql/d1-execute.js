@@ -3,6 +3,8 @@
  *
  * The Workers binding has no read-only mode. The parser is the only write
  * barrier on this path. Node uses SqliteAdapter.executeReadOnly instead.
+ * This function does not cancel the D1 statement. After the route returns
+ * SQL_TIMEOUT at 10 seconds, the query can still finish inside D1.
  */
 
 function columnNames(rows) {

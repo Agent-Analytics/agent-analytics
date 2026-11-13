@@ -2,9 +2,12 @@
  * POST /sql for the self-hosted server.
  *
  * Auth is the read API key. The statement is prepared by the shared SQL
- * contract, then executed by the caller. Node passes a read-only SQLite
- * connection. Workers passes the D1 binding, which can write. That difference
- * is documented on the Workers entry point.
+ * contract, including the date window, then executed by the caller. Node
+ * passes a read-only SQLite connection. Workers passes the D1 binding, which
+ * can write. That difference is documented on the Workers entry point.
+ *
+ * The route waits at most 10 seconds for executeSql. On Workers that ends
+ * the HTTP call only. The D1 statement can still finish after the response.
  */
 
 import {
@@ -23,6 +26,37 @@ const CORS_HEADERS = {
 };
 
 const EXPENSIVE_ROWS_READ = 1_000_000;
+const SQL_TIMEOUT_MS = 10_000;
+
+function sqlWindowFromBody(body) {
+  const window = {};
+  if (Object.hasOwn(body, 'days')) window.days = body.days;
+  if (Object.hasOwn(body, 'date_from')) window.date_from = body.date_from;
+  if (Object.hasOwn(body, 'date_to')) window.date_to = body.date_to;
+  return window;
+}
+
+function timeoutError() {
+  const error = new Error('sql timed out');
+  error.code = 'SQL_TIMEOUT';
+  return error;
+}
+
+// A late D1 rejection must not surface as an unhandled rejection after the
+// route has already returned SQL_TIMEOUT. The statement itself keeps running.
+async function executeWithinTimeout(execute) {
+  let timer;
+  const pending = Promise.resolve().then(execute);
+  pending.catch(() => {});
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(timeoutError()), SQL_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([pending, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -51,8 +85,9 @@ function failureResponse(error) {
     return json(errorResponse('SQL_TIMEOUT', 'sql timed out'), 504);
   }
 
-  if (error?.code === 'INVALID_SQL') {
-    return json(errorResponse('INVALID_SQL', clientMessage(error)), error.status || 400);
+  if (error?.code === 'INVALID_SQL' || error?.code === 'INVALID_WINDOW') {
+    const status = Number.isInteger(error.status) ? error.status : 400;
+    return json(errorResponse(error.code, clientMessage(error)), status);
   }
 
   const sqliteCode = String(error?.code || '');
@@ -140,17 +175,25 @@ export async function handleSqlRequest(request, { validateRead, executeSql }) {
 
   let prepared;
   try {
-    prepared = wrapProjectSql(statement, body.project);
+    prepared = wrapProjectSql(statement, body.project, sqlWindowFromBody(body));
   } catch (error) {
     return failureResponse(error);
   }
 
   try {
-    const executed = await executeSql(prepared);
-    return json(shapeSqlResult({
+    const executed = await executeWithinTimeout(() => executeSql(prepared));
+    const shaped = shapeSqlResult({
       ...executed,
       returnLimit: prepared.returnLimit,
-    }));
+    });
+    return json({
+      columns: shaped.columns,
+      rows: shaped.rows,
+      count: shaped.count,
+      truncated: shaped.truncated,
+      window: prepared.window,
+      statistics: shaped.statistics,
+    });
   } catch (error) {
     return failureResponse(error);
   }

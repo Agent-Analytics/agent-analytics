@@ -6,7 +6,7 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { SqliteAdapter } from '../db/sqlite.js';
 import { makeValidateWrite, makeValidateRead } from '../auth.js';
 import { createOssHandler } from '../oss-handler.js';
@@ -237,6 +237,8 @@ describe('POST /sql statement rejection', () => {
     'SELECT * FROM events LIMIT -1',
     "SELECT replace('page_view', 'page_', '')",
     'SELECT event FROM events -- DELETE FROM events',
+    'WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 3) SELECT n FROM c',
+    'SELECT a.event FROM events a, events b, events c',
   ];
 
   it.each(rejected)('rejects %s', async (statement) => {
@@ -271,6 +273,144 @@ describe('POST /sql statement rejection', () => {
     const { status, data } = await sql({ project: PROJECT, sql: statement });
     expect(status).toBe(400);
     expect(data.error).toBe('INVALID_SQL');
+  });
+});
+
+function utcDate(offsetDays) {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + offsetDays))
+    .toISOString()
+    .slice(0, 10);
+}
+
+function noonUtc(isoDate) {
+  return Date.parse(`${isoDate}T12:00:00.000Z`);
+}
+
+describe('POST /sql time window', () => {
+  const today = utcDate(0);
+  const boundary = utcDate(-6);
+  const outside = utcDate(-7);
+  const ancient = '2020-01-01';
+
+  beforeAll(async () => {
+    await track(PROJECT, 'window_inside', {
+      timestamp: noonUtc(today),
+      session_id: 'sess-window-inside',
+    });
+    await track(PROJECT, 'window_boundary', {
+      timestamp: noonUtc(boundary),
+      session_id: 'sess-window-boundary',
+    });
+    await track(PROJECT, 'window_outside', {
+      timestamp: noonUtc(outside),
+      session_id: 'sess-window-outside',
+    });
+    await track(PROJECT, 'window_ancient', {
+      timestamp: noonUtc(ancient),
+      session_id: 'sess-window-ancient',
+    });
+  });
+
+  function names(data) {
+    return data.rows.map((row) => row[0]).sort();
+  }
+
+  it('leaves rows outside the default 7 day window out of the result', async () => {
+    const { status, data } = await sql({
+      project: PROJECT,
+      sql: "SELECT event FROM events WHERE event LIKE 'window_%'",
+    });
+    expect(status).toBe(200);
+    expect(names(data)).toEqual(['window_boundary', 'window_inside']);
+    expect(names(data)).not.toContain('window_outside');
+    expect(names(data)).not.toContain('window_ancient');
+    expect(data.window).toEqual({ date_from: boundary, date_to: today });
+
+    const sessions = await sql({
+      project: PROJECT,
+      sql: "SELECT session_id FROM sessions WHERE session_id LIKE 'sess-window-%'",
+    });
+    expect(sessions.status).toBe(200);
+    expect(names(sessions.data)).toEqual(['sess-window-boundary', 'sess-window-inside']);
+  });
+
+  it('returns only rows inside an explicit date range', async () => {
+    const { status, data } = await sql({
+      project: PROJECT,
+      sql: "SELECT event FROM events WHERE event LIKE 'window_%'",
+      date_from: ancient,
+      date_to: ancient,
+    });
+    expect(status).toBe(200);
+    expect(names(data)).toEqual(['window_ancient']);
+    expect(data.window).toEqual({ date_from: ancient, date_to: ancient });
+
+    const sessions = await sql({
+      project: PROJECT,
+      sql: "SELECT session_id FROM sessions WHERE session_id LIKE 'sess-window-%'",
+      date_from: outside,
+      date_to: outside,
+    });
+    expect(names(sessions.data)).toEqual(['sess-window-outside']);
+  });
+
+  it('honors days and rejects a window that breaks the contract', async () => {
+    const oneDay = await sql({
+      project: PROJECT,
+      sql: "SELECT event FROM events WHERE event LIKE 'window_%'",
+      days: 1,
+    });
+    expect(oneDay.status).toBe(200);
+    expect(names(oneDay.data)).toEqual(['window_inside']);
+    expect(oneDay.data.window).toEqual({ date_from: today, date_to: today });
+
+    const eightDays = await sql({
+      project: PROJECT,
+      sql: "SELECT event FROM events WHERE event LIKE 'window_%'",
+      days: 8,
+    });
+    expect(names(eightDays.data)).toEqual(['window_boundary', 'window_inside', 'window_outside']);
+
+    const invalid = [
+      { days: 0 },
+      { days: 91 },
+      { days: '7' },
+      { days: 7, date_from: ancient },
+      { date_from: ancient },
+      { date_from: today, date_to: ancient },
+      { date_from: utcDate(-90), date_to: today },
+    ];
+    for (const body of invalid) {
+      const { status, data } = await sql({
+        project: PROJECT,
+        sql: 'SELECT event FROM events',
+        ...body,
+      });
+      expect(status).toBe(400);
+      expect(data.error).toBe('INVALID_WINDOW');
+    }
+  });
+});
+
+describe('POST /sql join limit', () => {
+  it('rejects a third events reference', async () => {
+    const { status, data } = await sql({
+      project: PROJECT,
+      sql: 'SELECT a.event FROM events a, events b, events c',
+    });
+    expect(status).toBe(400);
+    expect(data.error).toBe('INVALID_SQL');
+    expect(data.message).toMatch(/at most 2 references/i);
+  });
+
+  it('allows two references to events', async () => {
+    const { status, data } = await sql({
+      project: PROJECT,
+      sql: "SELECT a.event FROM events a JOIN events b ON a.id = b.id WHERE a.event = 'page_view'",
+    });
+    expect(status).toBe(200);
+    expect(data.rows).toEqual([['page_view']]);
   });
 });
 
@@ -373,6 +513,33 @@ describe('SQL response statistics', () => {
       rows_read: 1_000_001,
       expensive: true,
     });
+  });
+
+  it('returns SQL_TIMEOUT when execution is still running after 10 seconds', async () => {
+    vi.useFakeTimers();
+    try {
+      let settled = false;
+      const responsePromise = handleSqlRequest(postJSON('/sql', {
+        project: PROJECT,
+        sql: 'SELECT event FROM events',
+      }, { 'X-API-Key': API_KEY }), {
+        validateRead: () => ({ valid: true }),
+        executeSql: () => new Promise(() => {}),
+      }).then((response) => {
+        settled = true;
+        return response;
+      });
+
+      await vi.advanceTimersByTimeAsync(9_999);
+      expect(settled).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      const response = await responsePromise;
+      expect(response.status).toBe(504);
+      const data = await response.json();
+      expect(data.error).toBe('SQL_TIMEOUT');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('maps a database timeout to SQL_TIMEOUT', async () => {

@@ -9,6 +9,10 @@
  * miss can modify the database. The Node server is stricter: it runs POST /sql
  * on a SQLite connection opened read-only. Treat this Workers path as weaker.
  *
+ * The SQL route stops waiting after 10 seconds and returns SQL_TIMEOUT.
+ * That response does not cancel the statement. The query can still finish
+ * inside D1 after the Worker has already answered.
+ *
  * For the multi-tenant hosted product, see hosted/entry.js.
  */
 
