@@ -20,6 +20,7 @@ import { makeValidateWrite, makeValidateRead } from '../auth.js';
 import { D1Adapter, ensureD1Compatibility } from '../db/d1.js';
 import { createOssHandler } from '../oss-handler.js';
 import { executeD1Sql } from '../sql/d1-execute.js';
+import { createErasureHandler } from '../erasures/handler.js';
 
 export default {
   async fetch(request, env, ctx) {
@@ -28,13 +29,13 @@ export default {
     const validateWrite = makeValidateWrite(env.PROJECT_TOKENS);
     const validateRead = makeValidateRead(env.API_KEYS);
     const allowedOrigins = env.ALLOWED_ORIGINS ? env.ALLOWED_ORIGINS.split(',').map(o => o.trim()) : undefined;
-    const handleRequest = createOssHandler({
+    const handleRequest = createErasureHandler(createOssHandler({
       db,
       validateWrite,
       validateRead,
       allowedOrigins,
       executeSql: (prepared) => executeD1Sql(env.DB, prepared),
-    });
+    }), { db, validateRead });
     const { response, writeOps } = await handleRequest(request);
 
     if (writeOps) {

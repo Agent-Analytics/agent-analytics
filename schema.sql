@@ -41,3 +41,26 @@ CREATE TABLE IF NOT EXISTS identity_map (
 );
 
 CREATE INDEX IF NOT EXISTS idx_identity_canonical ON identity_map(canonical_id, project_id);
+
+CREATE TABLE IF NOT EXISTS erasure_requests (
+  id TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL,
+  project_id TEXT NOT NULL,
+  project_name TEXT NOT NULL,
+  idempotency_key TEXT NOT NULL,
+  subject_type TEXT NOT NULL,
+  subject_hash TEXT NOT NULL,
+  status TEXT NOT NULL,
+  counts_json TEXT,
+  error TEXT,
+  created_at INTEGER NOT NULL,
+  started_at INTEGER,
+  completed_at INTEGER,
+  requested_by TEXT NOT NULL,
+  body_hash TEXT NOT NULL,
+  replay_included INTEGER NOT NULL,
+  UNIQUE (account_id, idempotency_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_erasure_project_created
+  ON erasure_requests(project_name, created_at);

@@ -5,6 +5,7 @@ import {
   buildIdentifyStatements,
   buildSessionUpsertStatement,
 } from './identity-aware.js';
+import { CREATE_ERASURE_INDEX, CREATE_ERASURE_REQUESTS } from '../erasures/sql.js';
 
 const schemaCompatibility = new WeakMap();
 
@@ -31,6 +32,8 @@ export function ensureD1Compatibility(db) {
     `).run();
 
     await db.prepare('CREATE INDEX IF NOT EXISTS idx_identity_canonical ON identity_map(canonical_id, project_id)').run();
+    await db.prepare(CREATE_ERASURE_REQUESTS).run();
+    await db.prepare(CREATE_ERASURE_INDEX).run();
   })().catch((error) => {
     schemaCompatibility.delete(db);
     throw error;

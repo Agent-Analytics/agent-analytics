@@ -14,6 +14,7 @@ import { MAX_BODY_BYTES } from '@agent-analytics/core';
 import { SqliteAdapter } from '../db/sqlite.js';
 import { makeValidateWrite, makeValidateRead } from '../auth.js';
 import { createOssHandler } from '../oss-handler.js';
+import { createErasureHandler } from '../erasures/handler.js';
 
 const PORT = parseInt(process.env.PORT || '8787', 10);
 const API_KEYS = process.env.API_KEYS || '';
@@ -24,13 +25,14 @@ const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS || '';
 const db = new SqliteAdapter(DB_PATH);
 let shuttingDown = false;
 
-const handleRequest = createOssHandler({
+const validateRead = makeValidateRead(API_KEYS);
+const handleRequest = createErasureHandler(createOssHandler({
   db,
   validateWrite: makeValidateWrite(PROJECT_TOKENS),
-  validateRead: makeValidateRead(API_KEYS),
+  validateRead,
   allowedOrigins: ALLOWED_ORIGINS ? ALLOWED_ORIGINS.split(',').map(o => o.trim()) : undefined,
   executeSql: (prepared) => db.executeReadOnly(prepared.sql, prepared.params),
-});
+}), { db, validateRead });
 
 const server = createServer(async (req, res) => {
   if (shuttingDown) {
