@@ -239,6 +239,10 @@ describe('POST /sql statement rejection', () => {
     'SELECT event FROM events -- DELETE FROM events',
     'WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n + 1 FROM c WHERE n < 3) SELECT n FROM c',
     'SELECT a.event FROM events a, events b, events c',
+    "SELECT 1 WHERE 'x' IN identity_map",
+    'SELECT randomblob(8)',
+    'SELECT zeroblob(8)',
+    'SELECT a.event FROM events a JOIN events b ON a.id = b.id',
   ];
 
   it.each(rejected)('rejects %s', async (statement) => {
@@ -402,34 +406,54 @@ describe('POST /sql join limit', () => {
     });
     expect(status).toBe(400);
     expect(data.error).toBe('INVALID_SQL');
-    expect(data.message).toMatch(/at most 2 references/i);
   });
 
-  it('allows two references to events', async () => {
-    const { status, data } = await sql({
+  it('rejects a self-join and allows one events row joined to sessions', async () => {
+    const selfJoin = await sql({
       project: PROJECT,
       sql: "SELECT a.event FROM events a JOIN events b ON a.id = b.id WHERE a.event = 'page_view'",
     });
+    expect(selfJoin.status).toBe(400);
+    expect(selfJoin.data.error).toBe('INVALID_SQL');
+
+    const { status, data } = await sql({
+      project: PROJECT,
+      sql: "SELECT events.event FROM events JOIN sessions ON events.session_id = sessions.session_id WHERE events.event = 'page_view'",
+    });
     expect(status).toBe(200);
     expect(data.rows).toEqual([{ event: 'page_view' }]);
+  });
+
+  it('rejects x IN identity_map', async () => {
+    const { status, data } = await sql({
+      project: PROJECT,
+      sql: "SELECT 1 WHERE 'x' IN identity_map",
+    });
+    expect(status).toBe(400);
+    expect(data.error).toBe('INVALID_SQL');
   });
 });
 
 describe('POST /sql row cap', () => {
   it('returns at most 1000 rows and sets truncated when more exist', async () => {
     const capAdapter = new SqliteAdapter(':memory:');
-    const capHandler = createOssHandler({
+    let rowsRead = 0;
+    const countingHandler = createOssHandler({
       db: capAdapter,
       validateWrite: makeValidateWrite(TOKEN),
       validateRead: makeValidateRead(API_KEY),
-      executeSql: (prepared) => capAdapter.executeReadOnly(prepared.sql, prepared.params),
+      executeSql: (prepared) => {
+        const result = capAdapter.executeReadOnly(prepared.sql, prepared.params);
+        rowsRead = result.rows.length;
+        return result;
+      },
     });
     const events = [];
     for (let i = 0; i < 1005; i += 1) {
       events.push({ project: PROJECT, event: 'bulk', properties: { n: i } });
     }
     for (let offset = 0; offset < events.length; offset += 100) {
-      const result = await capHandler(postJSON('/track/batch', {
+      const result = await countingHandler(postJSON('/track/batch', {
         token: TOKEN,
         events: events.slice(offset, offset + 100),
       }));
@@ -438,7 +462,7 @@ describe('POST /sql row cap', () => {
     }
 
     async function capSql(statement) {
-      const { response } = await capHandler(postJSON('/sql', {
+      const { response } = await countingHandler(postJSON('/sql', {
         project: PROJECT,
         sql: statement,
       }, { 'X-API-Key': API_KEY }));
@@ -464,6 +488,13 @@ describe('POST /sql row cap', () => {
     const commented = await capSql("SELECT event FROM events WHERE event = 'bulk' -- page views");
     expect(commented.data.count).toBe(1000);
     expect(commented.data.truncated).toBe(true);
+
+    const commentedStar = await capSql('SELECT * FROM events -- c');
+    expect(commentedStar.status).toBe(200);
+    expect(rowsRead).toBeLessThanOrEqual(1001);
+    expect(commentedStar.data.count).toBe(1000);
+    expect(commentedStar.data.truncated).toBe(true);
+    expect(commentedStar.data.rows[0].event).toBe('bulk');
   });
 });
 

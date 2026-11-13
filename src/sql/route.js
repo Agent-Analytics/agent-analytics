@@ -14,7 +14,6 @@ import {
   ERROR_CODES,
   errorResponse,
   MAX_BODY_BYTES,
-  SQL_MAX_BYTES,
   wrapProjectSql,
 } from '@agent-analytics/core';
 
@@ -191,17 +190,9 @@ export async function handleSqlRequest(request, { validateRead, executeSql }) {
     return json(errorResponse('INVALID_SQL', 'sql must be a string'), 400);
   }
 
-  // A trailing line comment would swallow a LIMIT appended on the same line.
-  // The shared wrapper appends the cap at the end of the statement, so give
-  // that LIMIT its own line when the extra byte still fits in the 20 KB cap.
-  let statement = body.sql;
-  if (!statement.endsWith('\n') && byteLength(statement) + 1 <= SQL_MAX_BYTES) {
-    statement = `${statement}\n`;
-  }
-
   let prepared;
   try {
-    prepared = wrapProjectSql(statement, body.project, sqlWindowFromBody(body));
+    prepared = wrapProjectSql(body.sql, body.project, sqlWindowFromBody(body));
   } catch (error) {
     return failureResponse(error);
   }
