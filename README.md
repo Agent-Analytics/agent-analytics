@@ -369,7 +369,9 @@ The self-hosted server in this repo exposes these routes:
 - `GET /erasures?project=...`
 - `GET /erasures/:id`
 
-Read endpoints require `X-API-Key`. Write endpoints use the public project token in the JSON body. `POST /erasures` uses `X-API-Key` as well. The public docs and OpenAPI spec cover the broader Agent Analytics platform too, so treat the list above as the source of truth for the OSS server in this repo.
+Read endpoints require `X-API-Key`. Write endpoints use the public project token in the JSON body. `POST /sql` and `POST /erasures` use `X-API-Key` as well. The public docs and OpenAPI spec cover the broader Agent Analytics platform too, so treat the list above as the source of truth for the OSS server in this repo.
+
+`POST /query` is the supported way to aggregate. `group_by` accepts the fields `event`, `date`, `user_id`, `session_id`, and `country`, plus at most one `properties.<key>`. The property value comes back on the row under that same `properties.<key>` name. Two `properties.*` entries return `400` with `INVALID_GROUP_BY`.
 
 ## Subject erasure
 
@@ -393,8 +395,6 @@ This server stores identity links in `identity_map` only. It does not store `ide
 `GET /erasures/:id` and `GET /erasures?project=` return the receipt. The list is the 100 newest receipts for that project. A receipt includes counts and the subject type. It does not include the user id, session id, email, or idempotency key. The audit row stores a SHA-256 hash of the subject instead. That hash is still an identifier. Audit rows are deleted after 24 months.
 
 The operator re-applies erasures after restoring a backup. Restoring a SQLite snapshot or a D1 Time Travel bookmark can put deleted rows back. This server does not keep a second copy of the receipt outside the database. After a restore, send the erasure requests again.
-
-`POST /query` is the supported way to aggregate. `group_by` accepts the fields `event`, `date`, `user_id`, `session_id`, and `country`, plus at most one `properties.<key>`. The property value comes back on the row under that same `properties.<key>` name. Two `properties.*` entries return `400` with `INVALID_GROUP_BY`.
 
 ## Read-only SQL
 
