@@ -365,10 +365,36 @@ The self-hosted server in this repo exposes these routes:
 - `GET /properties?project=...`
 - `GET /properties/received?project=...`
 - `POST /sql`
+- `POST /erasures`
+- `GET /erasures?project=...`
+- `GET /erasures/:id`
 
-Read endpoints require `X-API-Key`. Write endpoints use the public project token in the JSON body. The public docs and OpenAPI spec cover the broader Agent Analytics platform too, so treat the list above as the source of truth for the OSS server in this repo.
+Read endpoints require `X-API-Key`. Write endpoints use the public project token in the JSON body. `POST /sql` and `POST /erasures` use `X-API-Key` as well. The public docs and OpenAPI spec cover the broader Agent Analytics platform too, so treat the list above as the source of truth for the OSS server in this repo.
 
 `POST /query` is the supported way to aggregate. `group_by` accepts the fields `event`, `date`, `user_id`, `session_id`, and `country`, plus at most one `properties.<key>`. The property value comes back on the row under that same `properties.<key>` name. Two `properties.*` entries return `400` with `INVALID_GROUP_BY`.
+
+## Subject erasure
+
+`POST /erasures` deletes one person from this server's database. The JSON body matches Agent Analytics Cloud: `project`, `idempotency_key`, `confirm` set to the string `erase`, and exactly one of `user_id`, `session_id`, or `email`. `include_replays` defaults to true. The delete runs to completion inside the request, so a successful call returns `200` with `status` `completed`. This server has no erasure queue and no replay storage. `replay_sessions` and `replay_objects` in the receipt are 0. Email erasure is not supported here: `email` returns `400` and `INVALID_ERASURE` because there is no email lookup index, and no rows are deleted.
+
+Whoever holds `API_KEYS` can erase. That read key can erase every project stored in the database. The `project` string selects which rows are deleted. A project string is not an authorization boundary.
+
+```bash
+curl -s -X POST "$AGENT_ANALYTICS_URL/erasures" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: $AGENT_ANALYTICS_API_KEY" \
+  -d '{"project":"marketing-site","idempotency_key":"erase-user-123","confirm":"erase","user_id":"user_123"}'
+```
+
+The same `idempotency_key` and body returns the original receipt. The same key with a different body returns `409` and `IDEMPOTENCY_CONFLICT`. Sending that same body again after a `failed` receipt continues the delete. The audit row stores a SHA-256 hash of the idempotency key, not the key itself. `confirm_large` must be true when the id itself matches more than 100,000 events.
+
+`user_id` deletes that id and the ids found by walking `identity_map` for the named project. A session row is deleted only when every event in that session belongs to those ids. A session shared with someone else stays, including its events for the other person. The kept row's event count, times, and user id are recomputed from the events that remain. `session_id` deletes that session's events and session row only, with no identity walk. Rows in another project stay, even when they store the same user ids. Event properties that merely contain an id are left in place.
+
+This server stores identity links in `identity_map` only. It does not store `identity_aliases`, `user_profiles`, or `email_lookup_index`. That is why an email subject cannot be resolved, and why `portfolio: true` is rejected. There is no portfolio scope on this server.
+
+`GET /erasures/:id` and `GET /erasures?project=` return the receipt. The list is the 100 newest receipts for that project. A receipt includes counts and the subject type. It does not include the user id, session id, email, or idempotency key. The audit row stores a SHA-256 hash of the subject instead. That hash is still an identifier. Audit rows are deleted after 24 months.
+
+The operator re-applies erasures after restoring a backup. Restoring a SQLite snapshot or a D1 Time Travel bookmark can put deleted rows back. This server does not keep a second copy of the receipt outside the database. After a restore, send the erasure requests again.
 
 ## Read-only SQL
 
